@@ -1,10 +1,16 @@
 import express from "express";
 import path from "path";
+import cors from 'cors';
 import { createServer as createViteServer } from "vite";
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  
+  // 1. Configuramos el puerto automático para Render
+  const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
+
+  // 2. Activamos CORS para permitir conexiones externas (Crucial para el "Failed to fetch")
+  app.use(cors({ origin: true }));
 
   app.use(express.json());
 
@@ -41,7 +47,7 @@ async function startServer() {
       let title = "Producto sin título";
       let price = 0;
       let imgUrl = "";
-      let imagenes = [];
+     let imagenes: string[] = [];
 
       if (isAmazon) {
         // Extract title
@@ -153,6 +159,7 @@ async function startServer() {
     });
   }
 
+  // 3. El puerto ahora utiliza la variable que creamos arriba
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://0.0.0.0:${PORT}`);
   });

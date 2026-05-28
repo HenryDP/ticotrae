@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { collection, query, where, onSnapshot, doc, updateDoc, serverTimestamp, getDoc, setDoc } from 'firebase/firestore';
+import { signOut } from 'firebase/auth';
 import { db, auth } from '../firebase';
 import { Producto, CATEGORIAS, GeneralSettings } from '../types';
 import { FileEdit, CheckCircle2, DollarSign, Loader2, LogOut, Mail } from 'lucide-react';
@@ -14,9 +15,19 @@ export default function Admin() {
   const [importing, setImporting] = useState(false);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    if (!auth.currentUser) return;
+  const handleSignOut = async () => {
+    try {
+      await signOut(auth);
+      navigate('/');
+    } catch (error) {
+      console.error('Error al cerrar sesión:', error);
+    }
+  };
 
+  useEffect(() => {
+    if (!auth.currentUser) return; // Esperar auth
+
+    // Only fetch pending products belonging to the current user
     const q = query(
       collection(db, 'productos'), 
       where('estado', '==', 'pendiente'),
@@ -69,20 +80,29 @@ export default function Admin() {
              </button>
            )}
         </div>
-        <button
-          onClick={() => navigate('/')}
-          className="pb-3 text-sm font-medium text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white flex items-center gap-2 transition-colors"
-        >
-          <LogOut size={16} />
-          Volver a la Tienda
-        </button>
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => navigate('/')}
+            className="pb-3 text-sm font-medium text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors"
+          >
+            Volver a la Tienda
+          </button>
+          <button
+            onClick={handleSignOut}
+            className="pb-3 text-sm font-medium text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 flex items-center gap-2 transition-colors"
+          >
+            <LogOut size={16} />
+            Cerrar Sesión
+          </button>
+        </div>
       </div>
 
       {activeTab === 'productos' ? (
         <div className="flex flex-col-reverse md:flex-row gap-8 items-start">
-          
+          {/* Lista de pendientes */}
           <div className="w-full md:w-1/3 flex flex-col gap-6">
             
+            {/* Importador por URL */}
             <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-sm">
               <h3 className="font-semibold text-gray-900 dark:text-white mb-3 text-sm flex items-center gap-2">
                  Importar por URL
@@ -100,16 +120,11 @@ export default function Admin() {
                     if (!importUrl) return;
                     setImporting(true);
                     try {
-                      // 👇 AQUÍ ESTÁ LA CORRECCIÓN 👇
-                      // Reemplaza esta URL con la ruta de tu servidor una vez que lo subas (ej: Render, Railway)
-                      // Si estás programando en local, puedes usar temporalmente: 'http://localhost:3000/api/scrape'
-                      const res = await fetch('https://TU-SERVIDOR-EN-RENDER.com/api/scrape', {
+                      const res = await fetch('https://ticotrae.onrender.com', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ url: importUrl })
                       });
-                      // 👆 ---------------------- 👆
-
                       const data = await res.json();
                       if (res.ok) {
                         setEditingProd({
@@ -127,7 +142,7 @@ export default function Admin() {
                         alert("Error: " + (data.error || "No se pudo obtener datos. Comprueba la URL."));
                       }
                     } catch (e: any) {
-                      alert("Error al importar: Asegúrate de tener el backend (server.ts) encendido y apuntando a la URL correcta. Detalle: " + e.message);
+                      alert("Error al importar: " + e.message);
                     } finally {
                       setImporting(false);
                     }
@@ -170,6 +185,7 @@ export default function Admin() {
             </div>
           </div>
 
+          {/* Editor */}
           <div className="w-full md:w-2/3 sticky top-24">
             {editingProd ? (
               <EditorForm prod={editingProd} onDone={() => setEditingProd(null)} />
@@ -497,6 +513,7 @@ function EditorForm({ prod, onDone }: { prod: Producto, onDone: () => void }) {
   const [tiendaOrigen, setTiendaOrigen] = useState<'amazon' | 'ebay' | 'otra'>(prod.tienda_origen || (prod.url_original?.toLowerCase().includes('amazon') ? 'amazon' : prod.url_original?.toLowerCase().includes('ebay') ? 'ebay' : 'otra'));
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Update input text when prod changes
   useEffect(() => {
     setPrecioUsd(prod.precio_usd);
     setPesoKg(prod.peso_kg || 1);
@@ -512,6 +529,7 @@ function EditorForm({ prod, onDone }: { prod: Producto, onDone: () => void }) {
     setTiendaOrigen(prod.tienda_origen || (prod.url_original?.toLowerCase().includes('amazon') ? 'amazon' : prod.url_original?.toLowerCase().includes('ebay') ? 'ebay' : 'otra'));
   }, [prod]);
 
+  // Recalculate precioSugerido whenever costs change
   useEffect(() => {
     setPrecioFinal(Math.round(((precioUsd + pesoKg * costoKg) * impuesto * tc) + margen));
   }, [precioUsd, pesoKg, costoKg, impuesto, tc, margen]);
