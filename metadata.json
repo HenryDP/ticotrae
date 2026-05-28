@@ -1,0 +1,8 @@
+{
+  "name": "TicoTrae",
+  "description": "Extensión y PWA para capturar productos de Amazon y publicarlos con precio en Costa Rica.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

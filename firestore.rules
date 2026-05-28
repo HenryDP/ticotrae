@@ -1,0 +1,72 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Primitive Definition
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isSignedIn() { return request.auth != null; }
+
+    function isValidProducto(data) {
+      return data.keys().hasAll(['titulo', 'url_original', 'imagen_url', 'precio_usd', 'estado', 'ownerId']) &&
+             data.titulo is string && data.titulo.size() > 0 && data.titulo.size() <= 1000 &&
+             data.url_original is string && data.url_original.size() > 0 && data.url_original.size() <= 2000 &&
+             data.imagen_url is string && data.imagen_url.size() > 0 && data.imagen_url.size() <= 2000 &&
+             data.precio_usd is number && data.precio_usd >= 0 &&
+             data.estado in ['pendiente', 'publicado'] &&
+             data.ownerId == request.auth.uid &&
+             (data.keys().hasAny(['precio_cr']) == false || (data.precio_cr is number && data.precio_cr >= 0)) &&
+             (data.keys().hasAny(['categoria']) == false || (data.categoria is string)) &&
+             (data.keys().hasAny(['imagenes']) == false || (data.imagenes is list));
+    }
+
+    match /productos/{productoId} {
+      allow read: if true; // Any client can read products for the storefront
+
+      allow create: if isSignedIn() &&
+                       isValidId(productoId) &&
+                       isValidProducto(incoming()) &&
+                       incoming().keys().size() >= 8 && incoming().keys().size() <= 12 &&
+                       incoming().createdAt == request.time &&
+                       incoming().updatedAt == request.time;
+
+      allow update: if isSignedIn() &&
+                       isValidId(productoId) &&
+                       isValidProducto(incoming()) &&
+                       incoming().ownerId == existing().ownerId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().updatedAt == request.time &&
+                       (
+                         // Author modifying own product
+                         (existing().ownerId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['titulo', 'url_original', 'imagen_url', 'imagenes', 'precio_usd', 'precio_cr', 'categoria', 'estado', 'updatedAt']))
+                       );
+
+      allow delete: if isSignedIn() && isValidId(productoId) && existing().ownerId == request.auth.uid;
+    }
+
+    match /settings/{docId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
+    match /comentarios/{comentarioId} {
+      allow read: if true;
+      allow create: if isSignedIn() && incoming().autorId == request.auth.uid;
+    }
+
+    match /users/{userId} {
+      allow read, write: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    match /newsletter_subscribers/{docId} {
+      allow create: if true;
+      allow read, delete: if isSignedIn();
+    }
+  }
+}

@@ -1,0 +1,649 @@
+import React, { useEffect, useState } from 'react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { doc, getDoc, collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp, getDocs, limit } from 'firebase/firestore';
+import { db, auth } from '../firebase';
+import { Producto, Comentario } from '../types';
+import { ArrowLeft, ExternalLink, MessageCircle, Star, Loader2, Send, Facebook, Twitter, Share2, ChevronLeft, ChevronRight, ShoppingCart, Truck, ShieldCheck, ChevronDown, CheckCircle2, Tag } from 'lucide-react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+
+export default function ProductDetail() {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const [producto, setProducto] = useState<Producto | null>(null);
+  const [comentarios, setComentarios] = useState<Comentario[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [nuevoComentario, setNuevoComentario] = useState("");
+  const [nombreAutor, setNombreAutor] = useState("");
+  const [rating, setRating] = useState(5);
+  const [enviando, setEnviando] = useState(false);
+  const [currentImageIdx, setCurrentImageIdx] = useState(0);
+  const [recomendaciones, setRecomendaciones] = useState<Producto[]>([]);
+  const [openPolicy, setOpenPolicy] = useState<string | null>(null);
+  const [cantidad, setCantidad] = useState(1);
+  const [talla, setTalla] = useState("Estándar");
+
+  useEffect(() => {
+    if (producto && producto.tallas) {
+      const parsed = producto.tallas.split(',').map(t => t.trim()).filter(t => t);
+      if (parsed.length > 0) {
+        setTalla(parsed[0]);
+      }
+    }
+
+    const searchParams = new URLSearchParams(window.location.search);
+    if (producto && searchParams.get('autoBuy') === 'true') {
+      const sku = producto.sku || (producto.categoria 
+        ? `PROD-${producto.categoria.substring(0,3).toUpperCase()}-${producto.id.substring(0,4).toUpperCase()}`
+        : `PROD-GEN-${producto.id.substring(0,4).toUpperCase()}`);
+      
+      const message = `Hola, me interesa encargar este producto mediante pago por SINPE Móvil:\n\n*${producto.titulo}*\nSKU: ${sku}\nCantidad: ${cantidad}\nVariante/Talla: ${talla}\n\nPrecio Final c/u: ₡${producto.precio_cr?.toLocaleString('es-CR')}\n\nEnlace original: ${producto.url_original}`;
+      const whatsappUrl = `https://wa.me/50664435508?text=${encodeURIComponent(message)}`;
+      window.open(whatsappUrl, '_blank');
+      
+      // Remove query string to avoid re-triggering
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [producto]);
+
+  useEffect(() => {
+    if (!id) return;
+    
+    // Fetch product
+    getDoc(doc(db, 'productos', id)).then(docSnap => {
+      if (docSnap.exists()) {
+        const prodData = { id: docSnap.id, ...docSnap.data() } as Producto;
+        setProducto(prodData);
+        
+        // Fetch recomendaciones
+        if (prodData.categoria) {
+           const getRecs = async () => {
+             const qRecs = query(
+               collection(db, 'productos'),
+               where('categoria', '==', prodData.categoria),
+               limit(5)
+             );
+             const recsSnap = await getDocs(qRecs);
+             const recs: Producto[] = [];
+             recsSnap.forEach(d => {
+               if (d.id !== prodData.id) {
+                 recs.push({ id: d.id, ...d.data() } as Producto);
+               }
+             });
+             setRecomendaciones(recs.slice(0, 4));
+           };
+           getRecs();
+        }
+      }
+      setLoading(false);
+    });
+
+    // Sub to comments
+    const q = query(
+      collection(db, 'comentarios'),
+      where('productoId', '==', id),
+      orderBy('createdAt', 'desc')
+    );
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const comms: Comentario[] = [];
+      snapshot.forEach((doc) => {
+        comms.push({ id: doc.id, ...doc.data() } as Comentario);
+      });
+      setComentarios(comms);
+    });
+
+    return () => unsubscribe();
+  }, [id]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!nuevoComentario.trim() || !id || !auth.currentUser) return;
+    
+    setEnviando(true);
+    try {
+      await addDoc(collection(db, 'comentarios'), {
+        productoId: id,
+        texto: nuevoComentario.trim(),
+        autor: nombreAutor.trim() || 'Usuario Anónimo',
+        autorId: auth.currentUser.uid,
+        rating,
+        createdAt: serverTimestamp()
+      });
+      setNuevoComentario("");
+      setNombreAutor("");
+      setRating(5);
+    } catch (err: any) {
+      alert("Error al enviar comentario: " + err.message);
+    } finally {
+      setEnviando(false);
+    }
+  };
+
+  const priceHistoryData = React.useMemo(() => {
+    if (!producto) return [];
+    const currentPrice = producto.precio_cr || 0;
+    // Generate some fake variation over the last 6 months for the chart
+    return [
+      { name: 'Ene', precio: Math.round(currentPrice * 1.05) },
+      { name: 'Feb', precio: Math.round(currentPrice * 1.08) },
+      { name: 'Mar', precio: Math.round(currentPrice * 0.98) },
+      { name: 'Abr', precio: Math.round(currentPrice * 1.02) },
+      { name: 'May', precio: Math.round(currentPrice * 1.05) },
+      { name: 'Jun', precio: Math.round(currentPrice) },
+    ];
+  }, [producto]);
+
+  if (loading) {
+    return <div className="text-center py-20 text-gray-500"><Loader2 className="animate-spin mx-auto" size={32} /></div>;
+  }
+
+  if (!producto) {
+    return <div className="text-center py-20 text-gray-500">Producto no encontrado.</div>;
+  }
+
+  // Fallback SKU generation
+  const sku = producto.sku || (producto.categoria 
+    ? `PROD-${producto.categoria.substring(0,3).toUpperCase()}-${producto.id.substring(0,4).toUpperCase()}`
+    : `PROD-GEN-${producto.id.substring(0,4).toUpperCase()}`);
+
+  // Whatsapp logic with quantity and variant
+  const message = `Hola, me interesa encargar este producto mediante pago por SINPE Móvil:\n\n*${producto.titulo}*\nSKU: ${sku}\nCantidad: ${cantidad}\nVariante/Talla: ${talla}\n\nPrecio Final c/u: ₡${producto.precio_cr?.toLocaleString('es-CR')}\n\nEnlace original: ${producto.url_original}`;
+  const whatsappUrl = `https://wa.me/50664435508?text=${encodeURIComponent(message)}`;
+
+  const images = (producto.imagenes && producto.imagenes.length > 0) ? producto.imagenes : [producto.imagen_url];
+
+  const nextImage = () => setCurrentImageIdx(p => (p + 1) % images.length);
+  const prevImage = () => setCurrentImageIdx(p => (p - 1 + images.length) % images.length);
+
+  const togglePolicy = (policy: string) => {
+    setOpenPolicy(p => p === policy ? null : policy);
+  };
+
+  const handleBuy = async () => {
+    if (!auth.currentUser || auth.currentUser.isAnonymous) {
+      alert('Por favor, regístrate o inicia sesión para continuar con tu compra.');
+      navigate(`/profile?redirect=${encodeURIComponent(window.location.pathname)}`);
+      return;
+    }
+    
+    try {
+      const docRef = doc(db, 'users', auth.currentUser.uid);
+      const docSnap = await getDoc(docRef);
+      if (!docSnap.exists() || !docSnap.data().phoneNumber) {
+        alert('Por favor completa tu perfil de cliente (teléfono) para poder comprar.');
+        navigate(`/profile?redirect=${encodeURIComponent(window.location.pathname)}`);
+        return;
+      }
+    } catch (e) {
+      console.error(e);
+    }
+
+    window.open(whatsappUrl, '_blank');
+  };
+
+  // Parse tallas if available
+  const tallasArray = producto.tallas 
+    ? producto.tallas.split(',').map(t => t.trim()).filter(t => t) 
+    : [];
+
+  return (
+    <div className="flex flex-col gap-8 max-w-4xl mx-auto pb-10">
+      <Link to="/" className="inline-flex items-center gap-2 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors w-max">
+        <ArrowLeft size={18} />
+        Volver al Catálogo
+      </Link>
+
+      <div className="bg-white dark:bg-slate-800 rounded-3xl border border-gray-200 dark:border-slate-700 shadow-sm overflow-hidden flex flex-col md:flex-row gap-0">
+        <div className="w-full md:w-[60%] p-8 flex flex-col items-center bg-white dark:bg-slate-50 gap-4">
+          <div className="relative w-full h-80 sm:h-96 flex items-center justify-center">
+            {images.length > 1 && (
+              <button onClick={prevImage} className="absolute left-0 bg-white/80 backdrop-blur p-2 rounded-full shadow-md border border-gray-100 text-gray-600 hover:text-blue-600 transition-colors z-10">
+                <ChevronLeft size={20} />
+              </button>
+            )}
+            <img 
+              src={images[currentImageIdx]} 
+              alt={producto.titulo} 
+              className="w-full h-full object-contain max-h-full mix-blend-multiply"
+            />
+            {images.length > 1 && (
+              <button onClick={nextImage} className="absolute right-0 bg-white/80 backdrop-blur p-2 rounded-full shadow-md border border-gray-100 text-gray-600 hover:text-blue-600 transition-colors z-10">
+                <ChevronRight size={20} />
+              </button>
+            )}
+          </div>
+          {images.length > 1 && (
+            <div className="flex gap-2 overflow-x-auto w-full pb-2 scrollbar-hide justify-center">
+              {images.map((img, idx) => (
+                <button 
+                  key={idx}
+                  onClick={() => setCurrentImageIdx(idx)}
+                  className={`w-14 h-14 rounded-lg border-2 p-1 bg-white shrink-0 transition-colors ${idx === currentImageIdx ? 'border-blue-500' : 'border-gray-200 hover:border-gray-300'}`}
+                >
+                  <img src={img} className="w-full h-full object-contain mix-blend-multiply" alt="" />
+                </button>
+              ))}
+            </div>
+          )}
+          
+          <div className="w-full mt-8 text-left border-t border-gray-100 pt-8">
+            <h3 className="text-xl font-bold text-gray-900 mb-4">Descripción Detallada</h3>
+            <p className="text-gray-600 leading-relaxed mb-8">
+              Este artículo exclusivo está diseñado para cumplir con los más altos estándares de calidad y durabilidad. Perfecto para tus necesidades diarias o uso especializado, su diseño ergonómico y acabados premium garantizan una excelente experiencia. Diseñado pensando en tu comodidad y eficiencia.
+            </p>
+
+            <h4 className="text-lg font-bold text-gray-900 mb-4">Características Técnicas</h4>
+            <ul className="space-y-3 mb-8">
+              <li className="flex items-start gap-3">
+                <CheckCircle2 size={20} className="text-blue-500 shrink-0 mt-0.5" />
+                <span className="text-gray-700"><strong>Materiales:</strong> Fabricación premium resistente, asegurando larga vida útil. Algodón/Poliéster/Plástico ABS (varía por artículo).</span>
+              </li>
+              <li className="flex items-start gap-3">
+                <CheckCircle2 size={20} className="text-blue-500 shrink-0 mt-0.5" />
+                <span className="text-gray-700"><strong>Dimensiones:</strong> Consulta la guía de medidas en el enlace original para detalles exactos.</span>
+              </li>
+              <li className="flex items-start gap-3">
+                <CheckCircle2 size={20} className="text-blue-500 shrink-0 mt-0.5" />
+                <span className="text-gray-700"><strong>Disponibilidad:</strong> Múltiples variaciones según stock en tienda.</span>
+              </li>
+            </ul>
+
+            <h4 className="text-lg font-bold text-gray-900 mb-4">Logística y Tiempos de Entrega</h4>
+            <div className="bg-blue-50 p-4 rounded-xl flex gap-4 items-start border border-blue-100">
+               <Truck className="text-blue-600 shrink-0" size={24} />
+               <p className="text-sm text-blue-900 leading-relaxed">
+                 Recibe este artículo en la puerta de tu casa en un plazo de <strong>24 a 48 horas hábiles</strong> dentro del Gran Área Metropolitana, y de <strong>3 a 5 días</strong> para el resto del país una vez ingrese a nuestras bodegas en Costa Rica.
+               </p>
+            </div>
+
+            <div className="mt-8 flex flex-col gap-3">
+               <div className="border border-gray-200 rounded-xl overflow-hidden">
+                 <button onClick={() => togglePolicy('entrega')} className="w-full bg-gray-50 px-5 py-4 flex items-center justify-between font-semibold text-gray-800 hover:bg-gray-100 transition-colors">
+                   <div className="flex items-center gap-3"><Truck size={18} className="text-gray-500"/> Políticas de Entrega</div>
+                   <ChevronDown size={18} className={`text-gray-500 transition-transform ${openPolicy === 'entrega' ? 'rotate-180' : ''}`} />
+                 </button>
+                 {openPolicy === 'entrega' && (
+                   <div className="p-5 bg-white text-sm text-gray-600 border-t border-gray-200">
+                     Hacemos envíos mediante Correos de Costa Rica y mensajería privada en la GAM. Todos nuestros paquetes requieren firma de recibido. Se enviará una notificación vía WhatsApp con tu número de rastreo tan pronto el paquete salga a ruta.
+                   </div>
+                 )}
+               </div>
+
+               <div className="border border-gray-200 rounded-xl overflow-hidden">
+                 <button onClick={() => togglePolicy('devolucion')} className="w-full bg-gray-50 px-5 py-4 flex items-center justify-between font-semibold text-gray-800 hover:bg-gray-100 transition-colors">
+                   <div className="flex items-center gap-3"><ShieldCheck size={18} className="text-gray-500"/> Políticas de Devolución y Cambio</div>
+                   <ChevronDown size={18} className={`text-gray-500 transition-transform ${openPolicy === 'devolucion' ? 'rotate-180' : ''}`} />
+                 </button>
+                 {openPolicy === 'devolucion' && (
+                   <div className="p-5 bg-white text-sm text-gray-600 border-t border-gray-200">
+                     Cuentas con <strong>30 días</strong> para realizar cambios por talla o defectos de fábrica, siempre y cuando el artículo conserve sus etiquetas originales, empaque y no muestre signos de uso o desgaste. No aplica para ropa interior o artículos cosméticos.
+                   </div>
+                 )}
+               </div>
+            </div>
+
+          </div>
+        </div>
+        <div className="w-full md:w-[40%] p-8 bg-gray-50/50 dark:bg-slate-800 flex flex-col border-l border-gray-200 dark:border-slate-700">
+          <div className="flex items-center justify-between mb-3 text-xs font-semibold tracking-wider">
+            <div className="flex items-center gap-2">
+              {producto.categoria && (
+                <span className="text-blue-600 uppercase">{producto.categoria}</span>
+              )}
+              {producto.marca && (
+                <div className="bg-gray-200 dark:bg-slate-700 text-gray-800 dark:text-gray-200 px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-widest shadow-sm">
+                  {producto.marca}
+                </div>
+              )}
+              {((producto.tienda_origen || (producto.url_original.toLowerCase().includes('amazon') ? 'amazon' : producto.url_original.toLowerCase().includes('ebay') ? 'ebay' : 'otra')) === 'amazon') && (
+                <div className="bg-[#FF9900] text-gray-900 px-2 py-0.5 rounded text-[10px] uppercase font-black tracking-widest shadow-sm">
+                  Amazon
+                </div>
+              )}
+              {((producto.tienda_origen || (producto.url_original.toLowerCase().includes('amazon') ? 'amazon' : producto.url_original.toLowerCase().includes('ebay') ? 'ebay' : 'otra')) === 'ebay') && (
+                <div className="bg-[#E53238] text-white px-2 py-0.5 rounded text-[10px] uppercase font-black tracking-widest shadow-sm">
+                  eBay
+                </div>
+              )}
+            </div>
+            <span className="text-gray-400 font-mono">SKU: {sku}</span>
+          </div>
+          {producto.isDailyDeal && (
+            <div className="mb-3 bg-red-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm inline-flex items-center gap-1.5 w-fit">
+              <Tag size={14} />
+              Oferta del Día (50% OFF)
+            </div>
+          )}
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 leading-tight mb-2">
+            {producto.titulo}
+          </h1>
+
+          {producto.descripcion && (
+            <p className="text-sm text-gray-600 dark:text-gray-300 mb-6 leading-relaxed bg-white dark:bg-slate-700 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-slate-600">
+              {producto.descripcion}
+            </p>
+          )}
+          
+          <div className="mt-auto flex flex-col gap-6">
+            <div className="flex flex-col gap-1 mb-6">
+              <span className="text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Precio Final</span>
+              <div className="flex items-end gap-3">
+                <span className="text-4xl font-bold text-blue-600 dark:text-blue-400">
+                  ₡{producto.precio_cr?.toLocaleString('es-CR')}
+                </span>
+                {producto.isDailyDeal && (
+                  <span className="text-lg text-gray-400 line-through dark:text-gray-500 mb-1">
+                    ₡{(producto.precio_cr * 2).toLocaleString('es-CR')}
+                  </span>
+                )}
+              </div>
+              <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Puesto en Costa Rica (Todo incluido)</span>
+            </div>
+
+            {/* Price Comparison Table & Chart */}
+            <div className="bg-white dark:bg-slate-700 rounded-xl border border-gray-200 dark:border-slate-600 shadow-sm overflow-hidden flex flex-col">
+              <div className="p-4 border-b border-gray-100 dark:border-slate-600">
+                <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-3">Análisis de Precio</h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm text-left">
+                    <thead className="text-xs text-gray-500 dark:text-gray-400 uppercase bg-gray-50 dark:bg-slate-800">
+                      <tr>
+                        <th className="px-3 py-2 rounded-tl-lg">Concepto</th>
+                        <th className="px-3 py-2 rounded-tr-lg text-right">Monto</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 dark:divide-slate-600/50">
+                      <tr className="hover:bg-gray-50 dark:hover:bg-slate-700/50">
+                        <td className="px-3 py-2 font-medium text-gray-900 dark:text-gray-200">
+                          Precio Original {producto.tienda_origen ? `(${producto.tienda_origen.charAt(0).toUpperCase() + producto.tienda_origen.slice(1)})` : ''}
+                        </td>
+                        <td className="px-3 py-2 text-right text-gray-700 dark:text-gray-300">${producto.precio_usd.toFixed(2)}</td>
+                      </tr>
+                      {producto.peso_kg && producto.peso_kg > 0 && (
+                        <tr className="hover:bg-gray-50 dark:hover:bg-slate-700/50">
+                          <td className="px-3 py-2 text-gray-600 dark:text-gray-400 flex items-center gap-1.5">
+                            <Truck size={14} className="text-gray-400" />
+                            Envío estimado ({producto.peso_kg}kg)
+                          </td>
+                          <td className="px-3 py-2 text-right text-gray-600 dark:text-gray-400">
+                            + ₡{Math.round(producto.peso_kg * (producto.costo_por_kg || 4000)).toLocaleString('es-CR')}
+                          </td>
+                        </tr>
+                      )}
+                      <tr className="bg-blue-50/50 dark:bg-slate-800/50 font-bold">
+                        <td className="px-3 py-3 text-gray-900 dark:text-white">Precio Final (Calculado)</td>
+                        <td className="px-3 py-3 text-right text-blue-600 dark:text-blue-400">
+                          ₡{producto.precio_cr?.toLocaleString('es-CR')}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              
+              <div className="p-4 bg-gray-50/50 dark:bg-slate-800/30">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Tendencia Histórica</span>
+                </div>
+                <div className="h-[120px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={priceHistoryData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" className="dark:opacity-10" />
+                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#9ca3af' }} dy={5} />
+                      <YAxis hide={true} domain={['dataMin - 1000', 'dataMax + 1000']} />
+                      <Tooltip 
+                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', fontSize: '12px' }}
+                        formatter={(value: number) => [`₡${value.toLocaleString('es-CR')}`, 'Precio']}
+                        labelStyle={{ color: '#6b7280', marginBottom: '4px' }}
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="precio" 
+                        stroke="#2563eb" 
+                        strokeWidth={2}
+                        dot={{ r: 3, fill: '#2563eb', strokeWidth: 2, stroke: '#fff' }}
+                        activeDot={{ r: 5, strokeWidth: 0 }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </div>
+
+            {/* Componente de Conversión / Call to Action */}
+            <div className="bg-white dark:bg-slate-700 p-6 rounded-2xl border border-gray-200 dark:border-slate-600 shadow-sm mb-6 flex flex-col gap-4">
+              
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Variante / Talla</label>
+                <select 
+                  value={talla}
+                  onChange={(e) => setTalla(e.target.value)}
+                  className="w-full border border-gray-300 dark:border-slate-600 dark:bg-slate-800 dark:text-white rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                >
+                  {tallasArray.length > 0 ? (
+                    tallasArray.map(t => (
+                      <option key={t} value={t}>{t}</option>
+                    ))
+                  ) : (
+                    <>
+                      <option value="Estándar">Estándar</option>
+                      <option value="S">Talla S</option>
+                      <option value="M">Talla M</option>
+                      <option value="L">Talla L</option>
+                      <option value="XL">Talla XL</option>
+                    </>
+                  )}
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Cantidad</label>
+                <div className="flex items-center">
+                  <button 
+                    onClick={() => setCantidad(c => Math.max(1, c - 1))}
+                    className="w-10 h-10 border border-gray-300 dark:border-slate-600 rounded-l-lg bg-gray-50 dark:bg-slate-800 text-gray-600 dark:text-gray-300 flex items-center justify-center hover:bg-gray-100 dark:hover:bg-slate-700"
+                  >
+                    -
+                  </button>
+                  <input 
+                    type="number" 
+                    value={cantidad}
+                    onChange={(e) => setCantidad(Math.max(1, parseInt(e.target.value) || 1))}
+                    className="w-16 h-10 border-y border-gray-300 dark:border-slate-600 dark:bg-slate-800 dark:text-white text-center text-sm font-medium focus:outline-none"
+                  />
+                  <button 
+                    onClick={() => setCantidad(c => c + 1)}
+                    className="w-10 h-10 border border-gray-300 dark:border-slate-600 rounded-r-lg bg-gray-50 dark:bg-slate-800 text-gray-600 dark:text-gray-300 flex items-center justify-center hover:bg-gray-100 dark:hover:bg-slate-700"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+
+              <button 
+                onClick={handleBuy}
+                className="w-full mt-4 bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold py-3.5 px-6 rounded-xl text-base transition-colors flex items-center justify-center gap-2 shadow-sm"
+              >
+                <MessageCircle size={20} />
+                Pedir por WhatsApp (+506 6443-5508)
+              </button>
+              <p className="text-xs text-center text-gray-500 dark:text-gray-400 mt-2">
+                *Serás redirigido a WhatsApp para confirmar el pedido.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              
+              <a 
+                href={producto.url_original} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="w-full bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-300 font-bold py-3 px-6 rounded-xl text-sm transition-colors flex items-center justify-center gap-2 border border-gray-200 dark:border-slate-700 shadow-sm"
+              >
+                <ExternalLink size={18} />
+                Ver original en Amazon
+              </a>
+
+              {/* Social Share */}
+              <div className="pt-3 border-t border-gray-100 dark:border-slate-700 mt-1">
+                <span className="text-xs font-semibold text-gray-400 mb-3 flex items-center gap-1.5 uppercase tracking-wider">
+                  <Share2 size={14} /> Compartir
+                </span>
+                <div className="flex items-center gap-3">
+                  <a 
+                    href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(window.location.href)}`}
+                    target="_blank" rel="noopener noreferrer"
+                    title="Compartir en Facebook"
+                    className="p-3 bg-gray-50 dark:bg-slate-700 hover:bg-[#1877F2]/10 text-gray-500 hover:text-[#1877F2] rounded-xl transition-all flex items-center justify-center group flex-1 border border-gray-100 dark:border-slate-600 hover:border-[#1877F2]/20 shadow-sm"
+                  >
+                    <Facebook size={20} className="group-hover:scale-110 transition-transform" />
+                  </a>
+                  <a 
+                    href={`https://twitter.com/intent/tweet?text=${encodeURIComponent('¡Mira este producto en TicoTrae! ' + producto.titulo)}&url=${encodeURIComponent(window.location.href)}`}
+                    target="_blank" rel="noopener noreferrer"
+                    title="Compartir en X"
+                    className="p-3 bg-gray-50 dark:bg-slate-700 hover:bg-black/10 text-gray-500 dark:hover:text-white hover:text-black rounded-xl transition-all flex items-center justify-center group flex-1 border border-gray-100 dark:border-slate-600 hover:border-black/20 shadow-sm"
+                  >
+                    <Twitter size={20} className="group-hover:scale-110 transition-transform" />
+                  </a>
+                  <a 
+                    href={`https://wa.me/?text=${encodeURIComponent('¡Mira este increíble producto en TicoTrae!\n\n*' + producto.titulo + '*\n\n' + window.location.href)}`}
+                    target="_blank" rel="noopener noreferrer"
+                    title="Compartir en WhatsApp"
+                    className="p-3 bg-gray-50 dark:bg-slate-700 hover:bg-[#25D366]/10 text-gray-500 hover:text-[#25D366] rounded-xl transition-all flex items-center justify-center group flex-1 border border-gray-100 dark:border-slate-600 hover:border-[#25D366]/20 shadow-sm"
+                  >
+                    <MessageCircle size={20} className="group-hover:scale-110 transition-transform" />
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Motor de Recomendaciones (Cross-Selling) */}
+      {recomendaciones.length > 0 && (
+        <div className="bg-white dark:bg-slate-800 rounded-3xl border border-gray-200 dark:border-slate-700 shadow-sm overflow-hidden p-6 sm:p-8 mt-4">
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6">También te podría interesar</h2>
+          <div className="flex overflow-x-auto gap-6 pb-4 scrollbar-hide">
+             {recomendaciones.map(rec => (
+               <Link 
+                 key={rec.id} 
+                 to={`/producto/${rec.id}`}
+                 className="min-w-[200px] w-[200px] sm:min-w-[220px] sm:w-[220px] group flex flex-col bg-white dark:bg-slate-800 rounded-2xl overflow-hidden shadow-sm border border-gray-100 dark:border-slate-700 hover:shadow-md transition-all shrink-0"
+               >
+                  <div className="aspect-square bg-white p-4 flex items-center justify-center relative">
+                    <img 
+                      src={rec.imagen_url} 
+                      alt={rec.titulo} 
+                      className="object-contain w-full h-full mix-blend-multiply group-hover:scale-105 transition-transform duration-300"
+                    />
+                  </div>
+                  <div className="p-4 border-t border-gray-50 dark:border-slate-700 flex flex-col flex-1">
+                    <h3 className="font-medium text-gray-900 dark:text-gray-100 text-xs line-clamp-2 leading-relaxed mb-2 flex-grow">
+                      {rec.titulo}
+                    </h3>
+                    <span className="text-base font-bold text-blue-600 dark:text-blue-400">
+                      ₡{rec.precio_cr?.toLocaleString('es-CR')}
+                    </span>
+                  </div>
+               </Link>
+             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Sección de Reseñas */}
+      <div className="bg-white dark:bg-slate-800 rounded-3xl border border-gray-200 dark:border-slate-700 shadow-sm overflow-hidden p-6 sm:p-8 mt-4">
+        <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-6 flex items-center gap-2">
+          <Star className="text-yellow-400" fill="currentColor" />
+          Reseñas y Comentarios ({comentarios.length})
+        </h2>
+
+        {/* Formulario */}
+        <form onSubmit={handleSubmit} className="mb-10 bg-gray-50 dark:bg-slate-700 p-5 rounded-2xl border border-gray-100 dark:border-slate-600 flex flex-col gap-4">
+          <h3 className="font-semibold text-gray-800 dark:text-gray-200 text-sm">Deja tu opinión</h3>
+          
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="w-full sm:w-1/3">
+              <input 
+                type="text" 
+                placeholder="Tu nombre (opcional)"
+                value={nombreAutor}
+                onChange={e => setNombreAutor(e.target.value)}
+                className="w-full px-4 py-2.5 rounded-xl border border-gray-300 dark:border-slate-600 dark:bg-slate-800 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+              />
+            </div>
+            <div className="flex items-center gap-1 bg-white dark:bg-slate-800 px-4 py-2.5 rounded-xl border border-gray-300 dark:border-slate-600">
+              <span className="text-sm font-medium text-gray-500 dark:text-gray-400 mr-2">Estrellas:</span>
+              {[1,2,3,4,5].map(i => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => setRating(i)}
+                  className="focus:outline-none"
+                >
+                  <Star size={18} className={i <= rating ? "text-yellow-400" : "text-gray-300"} fill={i <= rating ? "currentColor" : "none"} />
+                </button>
+              ))}
+            </div>
+          </div>
+          
+          <div className="relative">
+            <textarea 
+              rows={3}
+              placeholder="¿Qué te pareció este producto?"
+              value={nuevoComentario}
+              onChange={e => setNuevoComentario(e.target.value)}
+              className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-slate-600 dark:bg-slate-800 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+            />
+            <button 
+              type="submit"
+              disabled={enviando || !nuevoComentario.trim()}
+              className="absolute bottom-3 right-3 bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-lg transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+            >
+              {enviando ? <Loader2 className="animate-spin" size={18} /> : <Send size={18} />}
+            </button>
+          </div>
+        </form>
+
+        {/* Lista de comentarios */}
+        <div className="flex flex-col gap-4">
+          {comentarios.length === 0 ? (
+            <p className="text-center text-gray-500 py-8">Aún no hay reseñas. ¡Sé el primero en opinar!</p>
+          ) : (
+            comentarios.map(comentario => (
+              <div key={comentario.id} className="p-4 border-b border-gray-100 dark:border-slate-700 last:border-0 hover:bg-gray-50/50 dark:hover:bg-slate-700/50 transition-colors rounded-xl">
+                <div className="flex items-start justify-between mb-2 gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full flex items-center justify-center flex-shrink-0 font-bold uppercase">
+                      {comentario.autor.charAt(0)}
+                    </div>
+                    <div>
+                      <div className="font-semibold text-gray-900 dark:text-gray-100 text-sm flex items-center gap-2">
+                        {comentario.autor}
+                        {comentario.autorId === auth.currentUser?.uid && (
+                           <span className="bg-blue-100 text-blue-700 text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Tú</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-0.5 mt-0.5">
+                        {[1,2,3,4,5].map(i => (
+                          <Star key={i} size={12} className={i <= (comentario.rating || 5) ? "text-yellow-400" : "text-gray-300"} fill={i <= (comentario.rating || 5) ? "currentColor" : "none"} />
+                        ))}
+                        <span className="text-xs text-gray-400 dark:text-gray-500 ml-2">
+                          {comentario.createdAt?.toDate().toLocaleDateString('es-CR')}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <p className="text-gray-700 dark:text-gray-300 text-sm leading-relaxed mt-3 pl-13">
+                  {comentario.texto}
+                </p>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

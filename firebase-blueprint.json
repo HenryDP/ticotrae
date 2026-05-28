@@ -1,0 +1,28 @@
+{
+  "entities": {
+    "Producto": {
+      "title": "Producto",
+      "description": "Un producto capturado desde Amazon para su venta en Costa Rica.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "titulo": { "type": "string" },
+        "url_original": { "type": "string" },
+        "imagen_url": { "type": "string" },
+        "precio_usd": { "type": "number" },
+        "precio_cr": { "type": "number" },
+        "estado": { "type": "string", "enum": ["pendiente", "publicado"] },
+        "ownerId": { "type": "string", "description": "The UID of the user who captured the product" },
+        "createdAt": { "type": "object", "description": "Firestore timestamp" },
+        "updatedAt": { "type": "object", "description": "Firestore timestamp" }
+      },
+      "required": ["titulo", "url_original", "imagen_url", "precio_usd", "estado", "ownerId", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "productos/{productoId}": {
+      "schema": "Producto",
+      "description": "Collection of imported products"
+    }
+  }
+}
