@@ -3,7 +3,9 @@ import { Link } from 'react-router-dom';
 import { collection, query, where, onSnapshot, doc, updateDoc, getDoc, setDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { Producto, CATEGORIAS, GeneralSettings } from '../types';
-import { ExternalLink, Tag, Search, Filter, MessageCircle, Heart } from 'lucide-react';
+import { ExternalLink, Tag, Search, Filter, MessageCircle, Heart, ShoppingCart, Eye } from 'lucide-react';
+import DepartmentMenu from '../components/DepartmentMenu';
+import { useCart } from '../context/CartContext';
 
 import toast from 'react-hot-toast';
 
@@ -17,6 +19,8 @@ export default function Catalog() {
   const [showDailyDeals, setShowDailyDeals] = useState<boolean>(false);
   const [showNewProducts, setShowNewProducts] = useState<boolean>(false);
   const [settings, setSettings] = useState<GeneralSettings | null>(null);
+  
+  const { addToCart } = useCart();
   
   const [favorites, setFavorites] = useState<string[]>([]);
 
@@ -129,7 +133,7 @@ export default function Catalog() {
       const matchesCategory = selectedCategory === "Todas" || p.categoria === selectedCategory;
       const matchesBrand = selectedBrand === "Todas" || p.marca === selectedBrand;
       
-      const pStore = p.tienda_origen || (p.url_original.toLowerCase().includes('amazon') ? 'amazon' : p.url_original.toLowerCase().includes('ebay') ? 'ebay' : 'otra');
+      const pStore = p.tienda_origen || (p.url_original?.toLowerCase().includes('amazon') ? 'amazon' : p.url_original?.toLowerCase().includes('ebay') ? 'ebay' : 'otra');
       const matchesStore = selectedStore === "Todas" || pStore === selectedStore;
       
       const matchesDeals = showDailyDeals ? p.isDailyDeal === true : true;
@@ -161,6 +165,18 @@ export default function Catalog() {
 
   return (
     <div className="flex flex-col gap-6">
+      <DepartmentMenu 
+        selectedCategory={showDailyDeals ? "Ofertas" : selectedCategory}
+        onSelectCategory={(cat) => {
+          if (cat === "Ofertas") {
+            setShowDailyDeals(true);
+            setSelectedCategory("Todas");
+          } else {
+            setShowDailyDeals(false);
+            setSelectedCategory(cat);
+          }
+        }}
+      />
       {/* Hero Section */}
       <div className="bg-white dark:bg-slate-800 border-2 border-cr-blue dark:border-slate-700 rounded-3xl p-8 text-center flex flex-col items-center justify-center min-h-[200px] mb-2 shadow-sm relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-2 bg-cr-red"></div>
@@ -203,26 +219,17 @@ export default function Catalog() {
             </Link>
             <div className="w-px h-6 bg-gray-200 dark:bg-slate-700 mx-1"></div>
             <button
-              onClick={() => setSelectedCategory("Todas")}
+              onClick={() => {
+                setSelectedCategory("Todas");
+                setShowDailyDeals(false);
+              }}
               className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors flex-shrink-0
-                ${selectedCategory === "Todas" 
+                ${selectedCategory === "Todas" && !showDailyDeals
                   ? 'bg-blue-600 text-white shadow-sm ring-1 ring-blue-700' 
                   : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700'}`}
             >
-              Todas
+              Todos los Productos
             </button>
-            {CATEGORIAS.map(cat => (
-              <button
-                key={cat}
-                onClick={() => setSelectedCategory(cat)}
-                className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors flex-shrink-0
-                  ${selectedCategory === cat 
-                    ? 'bg-blue-600 text-white shadow-sm ring-1 ring-blue-700' 
-                    : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700'}`}
-              >
-                {cat}
-              </button>
-            ))}
           </div>
         </div>
 
@@ -312,8 +319,6 @@ export default function Catalog() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {filteredProductos.map(producto => {
-            const message = `Hola, me interesa encargar este producto mediante pago por SINPE Móvil:\n\n*${producto.titulo}*\n\nPrecio Final: ₡${producto.precio_cr?.toLocaleString('es-CR')}\n\nEnlace original: ${producto.url_original}`;
-            const whatsappUrl = `https://wa.me/50664435508?text=${encodeURIComponent(message)}`;
 
             return (
             <div 
@@ -339,12 +344,12 @@ export default function Catalog() {
                       {producto.marca}
                     </div>
                   )}
-                  {((producto.tienda_origen || (producto.url_original.toLowerCase().includes('amazon') ? 'amazon' : producto.url_original.toLowerCase().includes('ebay') ? 'ebay' : 'otra')) === 'amazon') && (
+                  {((producto.tienda_origen || (producto.url_original?.toLowerCase().includes('amazon') ? 'amazon' : producto.url_original?.toLowerCase().includes('ebay') ? 'ebay' : 'otra')) === 'amazon') && (
                     <div className="bg-[#FF9900] text-gray-900 px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-widest shadow-sm">
                       Amazon
                     </div>
                   )}
-                  {((producto.tienda_origen || (producto.url_original.toLowerCase().includes('amazon') ? 'amazon' : producto.url_original.toLowerCase().includes('ebay') ? 'ebay' : 'otra')) === 'ebay') && (
+                  {((producto.tienda_origen || (producto.url_original?.toLowerCase().includes('amazon') ? 'amazon' : producto.url_original?.toLowerCase().includes('ebay') ? 'ebay' : 'otra')) === 'ebay') && (
                     <div className="bg-[#E53238] text-white px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-widest shadow-sm">
                       eBay
                     </div>
@@ -393,15 +398,35 @@ export default function Catalog() {
                        Costa Rica
                      </span>
                   </div>
-                  <a 
-                    href={whatsappUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold py-2.5 px-4 rounded-xl text-sm transition-colors text-center flex items-center justify-center gap-2 shadow-sm"
-                  >
-                    <MessageCircle size={18} />
-                    Pedir por WhatsApp / SINPE
-                  </a>
+                  <div className="flex flex-col gap-2">
+                    <button 
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        addToCart(producto);
+                        toast.success('Agregado a tu carro', {
+                          icon: '🛒',
+                          style: {
+                            borderRadius: '10px',
+                            background: '#333',
+                            color: '#fff',
+                          },
+                        });
+                      }}
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-xl text-sm transition-colors text-center flex items-center justify-center gap-2 shadow-sm"
+                    >
+                      <ShoppingCart size={18} />
+                      Agregar a tu carro
+                    </button>
+
+                    <Link
+                      to={`/producto/${producto.id}`}
+                      className="w-full bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-300 font-bold py-2.5 px-4 rounded-xl text-sm transition-colors text-center flex items-center justify-center gap-2 border border-gray-200 dark:border-slate-700 shadow-sm"
+                    >
+                      <Eye size={18} />
+                      Ver detalle
+                    </Link>
+                  </div>
                 </div>
               </div>
             </div>

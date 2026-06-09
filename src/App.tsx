@@ -4,19 +4,22 @@ import Admin from './pages/Admin';
 import ProductDetail from './pages/ProductDetail';
 import Profile from './pages/Profile';
 import Wishlist from './pages/Wishlist';
-import { PackageSearch, User, Heart, Moon, Sun } from 'lucide-react';
+import Cart from './pages/Cart';
+import { PackageSearch, User, Heart, Moon, Sun, ShoppingCart } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { auth, db } from './firebase';
-import { signInAnonymously, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
+import { signInAnonymously } from 'firebase/auth';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { GeneralSettings } from './types';
 import Logo from './components/Logo';
 import Footer from './components/Footer';
 import { Toaster } from 'react-hot-toast';
+import { CartProvider, useCart } from './context/CartContext';
 
-function MainApp() {
+function Header() {
   const [settings, setSettings] = useState<GeneralSettings | null>(null);
   const [user, setUser] = useState(auth.currentUser);
+  const { totalItems } = useCart();
   const navigate = useNavigate();
 
   // Dark mode state
@@ -64,45 +67,70 @@ function MainApp() {
   }, []);
 
   return (
+    <header 
+      className="bg-gradient-to-r from-indigo-600 to-violet-600 sticky top-0 z-50 shadow-lg shadow-indigo-500/20 transition-colors border-b border-indigo-700 cursor-default"
+    >
+      <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+        <Link to="/" className="flex items-center gap-3 group" onClick={(e) => e.stopPropagation()}>
+          <div className="w-12 h-12 bg-white dark:bg-slate-800 rounded-xl flex items-center justify-center shadow-sm border border-gray-100 dark:border-slate-700 p-1.5 overflow-hidden">
+            {settings?.logoUrl ? (
+              <img src={settings.logoUrl} alt="Logo" className="w-full h-full object-contain mix-blend-multiply" />
+            ) : (
+              <Logo />
+            )}
+          </div>
+          <h1 className="text-xl font-bold tracking-tight text-white">{settings?.appName || "Tico Trae"}</h1>
+        </Link>
+        
+        <nav className="flex items-center gap-2 sm:gap-4 text-sm font-medium" onClick={(e) => e.stopPropagation()}>
+          <a 
+            href="https://www.amazon.com/your-orders/orders"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hidden md:flex text-white hover:bg-white/10 transition-colors items-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-lg border border-transparent hover:border-white/20" 
+            title="Rastrear mis paquetes en Amazon"
+          >
+            <PackageSearch size={16} />
+            <span>Rastreo Amazon</span>
+          </a>
+          <Link to="/" className="hidden sm:block text-white hover:text-gray-200 transition-colors">
+            Catálogo
+          </Link>
+          <Link to="/wishlist" className="text-white hover:bg-white/10 transition-colors flex items-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-lg border border-transparent hover:border-white/20" title="Lista de Deseos">
+            <Heart size={16} />
+            <span className="hidden sm:inline">Deseos</span>
+          </Link>
+          <Link to="/cart" className="text-white hover:bg-white/10 transition-colors flex items-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-lg border border-transparent hover:border-white/20 relative" title="Mi Carrito">
+            <ShoppingCart size={16} />
+            <span className="hidden sm:inline">Carrito</span>
+            {totalItems > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                {totalItems}
+              </span>
+            )}
+          </Link>
+          <Link to="/profile" className="text-white hover:bg-white/10 transition-colors flex items-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-lg border border-transparent hover:border-white/20" title={user && !user.isAnonymous ? "Mi Perfil" : "Iniciar Sesión"}>
+            <User size={16} />
+            <span className="hidden sm:inline">{user && !user.isAnonymous ? "Mi Perfil" : "Iniciar Sesión"}</span>
+          </Link>
+          <button 
+            onClick={() => setIsDark(!isDark)}
+            className="text-white hover:bg-white/10 transition-colors flex items-center p-1.5 sm:p-2 rounded-lg border border-transparent hover:border-white/20 ml-1" 
+            title={isDark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+          >
+            {isDark ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
+        </nav>
+      </div>
+    </header>
+  );
+}
+
+function MainApp() {
+  return (
     <div className="min-h-screen bg-neutral-50 dark:bg-slate-900 font-sans text-gray-900 dark:text-gray-100 flex flex-col">
       <Toaster position="bottom-right" />
-      <header 
-        className="bg-gradient-to-r from-indigo-600 to-violet-600 sticky top-0 z-50 shadow-lg shadow-indigo-500/20 transition-colors border-b border-indigo-700 cursor-default"
-      >
-        <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-3 group" onClick={(e) => e.stopPropagation()}>
-            <div className="w-12 h-12 bg-white dark:bg-slate-800 rounded-xl flex items-center justify-center shadow-sm border border-gray-100 dark:border-slate-700 p-1.5 overflow-hidden">
-              {settings?.logoUrl ? (
-                <img src={settings.logoUrl} alt="Logo" className="w-full h-full object-contain mix-blend-multiply" />
-              ) : (
-                <Logo />
-              )}
-            </div>
-            <h1 className="text-xl font-bold tracking-tight text-white">{settings?.appName || "Tico Trae"}</h1>
-          </Link>
-          
-          <nav className="flex items-center gap-2 sm:gap-4 text-sm font-medium" onClick={(e) => e.stopPropagation()}>
-            <Link to="/" className="hidden sm:block text-white hover:text-gray-200 transition-colors">
-              Catálogo
-            </Link>
-            <Link to="/wishlist" className="text-white hover:bg-white/10 transition-colors flex items-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-lg border border-transparent hover:border-white/20" title="Lista de Deseos">
-              <Heart size={16} />
-              <span className="hidden sm:inline">Deseos</span>
-            </Link>
-            <Link to="/profile" className="text-white hover:bg-white/10 transition-colors flex items-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-lg border border-transparent hover:border-white/20" title={user && !user.isAnonymous ? "Mi Perfil" : "Iniciar Sesión"}>
-              <User size={16} />
-              <span className="hidden sm:inline">{user && !user.isAnonymous ? "Mi Perfil" : "Iniciar Sesión"}</span>
-            </Link>
-            <button 
-              onClick={() => setIsDark(!isDark)}
-              className="text-white hover:bg-white/10 transition-colors flex items-center p-1.5 sm:p-2 rounded-lg border border-transparent hover:border-white/20 ml-1" 
-              title={isDark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
-            >
-              {isDark ? <Sun size={18} /> : <Moon size={18} />}
-            </button>
-          </nav>
-        </div>
-      </header>
+      <Header />
 
       <main className="max-w-7xl mx-auto px-4 py-8 flex-1 w-full">
         <Routes>
@@ -111,6 +139,7 @@ function MainApp() {
           <Route path="/producto/:id" element={<ProductDetail />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/wishlist" element={<Wishlist />} />
+          <Route path="/cart" element={<Cart />} />
         </Routes>
       </main>
       
@@ -165,8 +194,10 @@ export default function App() {
   }
 
   return (
-    <BrowserRouter>
-      <MainApp />
-    </BrowserRouter>
+    <CartProvider>
+      <BrowserRouter>
+        <MainApp />
+      </BrowserRouter>
+    </CartProvider>
   );
 }

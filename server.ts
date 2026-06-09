@@ -1,18 +1,76 @@
 import express from "express";
 import path from "path";
-import cors from 'cors';
 import { createServer as createViteServer } from "vite";
+import { GoogleGenAI } from "@google/genai";
+
+let ai: GoogleGenAI | null = null;
+
+function getAi() {
+  if (!ai) {
+    const key = process.env.GEMINI_API_KEY;
+    if (!key) {
+      throw new Error("GEMINI_API_KEY is not set.");
+    }
+    ai = new GoogleGenAI({ apiKey: key });
+  }
+  return ai;
+}
 
 async function startServer() {
   const app = express();
-  
-  // 1. Configuramos el puerto automático para Render
-  const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
-
-  // 2. Activamos CORS para permitir conexiones externas (Crucial para el "Failed to fetch")
-  app.use(cors({ origin: true }));
+  const PORT = 3000;
 
   app.use(express.json());
+
+  app.post("/api/recommend", async (req, res) => {
+    try {
+      const { current_product, user_history } = req.body;
+      
+      const promptText = `
+Eres el motor predictivo de comportamiento de la PWA "TicoTrae". Tu función exclusiva es analizar el producto que un usuario está visualizando en este momento y generar el set de datos para el módulo visual: "Los clientes que vieron este producto también vieron:".
+
+Debes actuar como un microservicio que analiza patrones de co-visualización y venta cruzada (cross-merchandising), asociando productos de tecnología, outdoor, fotografía y accesorios según la lógica de consumo en Costa Rica.
+
+REGLAS DE OPERACIÓN ESTRICTAS:
+1. Tu respuesta debe ser ÚNICAMENTE un arreglo JSON válido.
+2. NO utilices bloques de código Markdown (evita \`\`\`json y \`\`\`). No agregues introducciones, saludos ni explicaciones fuera del JSON.
+3. Debes generar exactamente 3 productos recomendados que no sean iguales al producto consultado.
+4. Incluye siempre una razón psicológica o comercial breve en el campo "coincidence_reason" (ej: "El 88% de los compradores añade este accesorio en la misma sesión").
+
+ESTRUCTURA DEL JSON REQUERIDA:
+[
+  {
+    "id": "string_id_sugerido",
+    "name": "Nombre del producto sugerido",
+    "category": "Categoría",
+    "price_crc": 0,
+    "coincidence_reason": "Breve razón de comportamiento del cliente (máx. 12 palabras)"
+  }
+]
+
+ENTRADA:
+${JSON.stringify({ current_product, user_history }, null, 2)}
+`;
+
+      const aiClient = getAi();
+      const response = await aiClient.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: promptText,
+      });
+
+      let responseText = response.text || "";
+      if (responseText.startsWith("```json")) {
+        responseText = responseText.replace(/```json/g, "").replace(/```/g, "").trim();
+      } else if (responseText.startsWith("```")) {
+        responseText = responseText.replace(/```/g, "").trim();
+      }
+
+      res.json(JSON.parse(responseText));
+    } catch (error: any) {
+      console.error("Error in recommendation:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
 
   // API Route to scrape Amazon and eBay
   app.post("/api/scrape", async (req, res) => {
@@ -47,7 +105,7 @@ async function startServer() {
       let title = "Producto sin título";
       let price = 0;
       let imgUrl = "";
-     let imagenes: string[] = [];
+      let imagenes: string[] = [];
 
       if (isAmazon) {
         // Extract title
@@ -69,15 +127,21 @@ async function startServer() {
           }
         }
 
+        // Clean Amazon image URL to get high-resolution version
+        const cleanAmazonUrl = (u: string) => {
+          if (!u) return "";
+          return u.replace(/\._[A-Za-z0-9_,-]+_\./g, '.');
+        };
+
         // Extract image
         let imgMatch = html.match(/<img[^>]*id="landingImage"[^>]*src="([^"]+)"/i) || html.match(/<img[^>]*id="imgBlkFront"[^>]*src="([^"]+)"/i) || html.match(/data-old-hires="([^"]+)"/i);
-        if (imgMatch) imgUrl = imgMatch[1];
+        if (imgMatch) imgUrl = cleanAmazonUrl(imgMatch[1]);
 
         const colorImagesMatch = html.match(/'colorImages':\s*\{\s*'initial':\s*(\[.+?\])\s*\},/);
         if (colorImagesMatch) {
           try {
             const parsed = JSON.parse(colorImagesMatch[1]);
-            imagenes = parsed.map((img: any) => img.hiRes || img.large).filter(Boolean);
+            imagenes = parsed.map((img: any) => cleanAmazonUrl(img.hiRes || img.large)).filter((u: string) => u.trim() !== "");
           } catch(e) {}
         }
         
@@ -87,7 +151,7 @@ async function startServer() {
             try {
               const parsedStr = imgBlkMatch[1].replace(/&quot;/g, '"');
               const parsed = JSON.parse(parsedStr);
-              imagenes = Object.keys(parsed);
+              imagenes = Object.keys(parsed).map(cleanAmazonUrl);
             } catch(e) {}
           }
         }
@@ -159,7 +223,6 @@ async function startServer() {
     });
   }
 
-  // 3. El puerto ahora utiliza la variable que creamos arriba
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://0.0.0.0:${PORT}`);
   });

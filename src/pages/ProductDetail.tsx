@@ -3,8 +3,33 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { doc, getDoc, collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp, getDocs, limit } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { Producto, Comentario } from '../types';
-import { ArrowLeft, ExternalLink, MessageCircle, Star, Loader2, Send, Facebook, Twitter, Share2, ChevronLeft, ChevronRight, ShoppingCart, Truck, ShieldCheck, ChevronDown, CheckCircle2, Tag } from 'lucide-react';
+import { ArrowLeft, ExternalLink, MessageCircle, Star, Loader2, Send, Facebook, Twitter, Share2, ChevronLeft, ChevronRight, ShoppingCart, Truck, ShieldCheck, ChevronDown, CheckCircle2, Tag, Calculator, DollarSign, Percent, Sparkles, TrendingUp } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import BotonCompra from '../components/BotonCompra';
+import ShareAmazonAffiliate from '../components/ShareAmazonAffiliate';
+import AmazonAffiliateButton from '../components/AmazonAffiliateButton';
+
+function getAffiliateUrl(url: string | null | undefined): string {
+  if (!url) return '#';
+  let cleanUrl = url;
+  if (url.toLowerCase().includes('amazon')) {
+    if (!url.includes('tag=')) {
+      const sep = url.includes('?') ? '&' : '?';
+      cleanUrl = `${url}${sep}tag=ticotrae1981-20`;
+    } else {
+      cleanUrl = url.replace(/tag=[^&]+/, 'tag=ticotrae1981-20');
+    }
+  }
+  return cleanUrl;
+}
+
+interface AiRecommendation {
+  id: string;
+  name: string;
+  category: string;
+  price_crc: number;
+  coincidence_reason: string;
+}
 
 export default function ProductDetail() {
   const { id } = useParams();
@@ -18,15 +43,53 @@ export default function ProductDetail() {
   const [enviando, setEnviando] = useState(false);
   const [currentImageIdx, setCurrentImageIdx] = useState(0);
   const [recomendaciones, setRecomendaciones] = useState<Producto[]>([]);
+  const [aiRecomendaciones, setAiRecomendaciones] = useState<AiRecommendation[]>([]);
   const [openPolicy, setOpenPolicy] = useState<string | null>(null);
   const [cantidad, setCantidad] = useState(1);
   const [talla, setTalla] = useState("Estándar");
+  const [envioDestino, setEnvioDestino] = useState<'ticotrae' | 'personal'>('ticotrae');
+  const [direccionPersonal, setDireccionPersonal] = useState('');
+  const [globalWhatsappUrl, setGlobalWhatsappUrl] = useState("https://wa.me/50664435508");
+
+  const isAdmin = auth.currentUser?.email === 'duranhenry1981@gmail.com';
+
+  // Calculator State
+  const [pesoKg, setPesoKg] = useState<number>(1);
+  const [envioUsa, setEnvioUsa] = useState<number>(0);
+  const [ganancia, setGanancia] = useState<number>(15);
+  const [tipoCambio, setTipoCambio] = useState<number>(515);
 
   useEffect(() => {
-    if (producto && producto.tallas) {
-      const parsed = producto.tallas.split(',').map(t => t.trim()).filter(t => t);
-      if (parsed.length > 0) {
-        setTalla(parsed[0]);
+    getDoc(doc(db, 'settings', 'footer')).then((docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.whatsappUrl) {
+          setGlobalWhatsappUrl(data.whatsappUrl);
+        }
+      }
+    });
+  }, []);
+
+  useEffect(() => {
+    if (producto) {
+      if (producto.tallas) {
+        const parsed = producto.tallas.split(',').map(t => t.trim()).filter(t => t);
+        if (parsed.length > 0) {
+          setTalla(parsed[0]);
+        }
+      } else {
+        const catLower = producto.categoria?.toLowerCase() || '';
+        const tituloLower = producto.titulo?.toLowerCase() || '';
+        const isShoes = catLower.includes('zapat') || catLower.includes('tenis') || catLower.includes('calzad') || tituloLower.includes('zapat') || tituloLower.includes('tenis');
+        const isClothes = catLower.includes('ropa') || catLower.includes('camis') || catLower.includes('pantal') || tituloLower.includes('camis') || catLower.includes('vestid') || tituloLower.includes('ropa');
+        
+        if (isShoes) {
+          setTalla('US 8');
+        } else if (isClothes) {
+          setTalla('M');
+        } else {
+          setTalla('Estándar');
+        }
       }
     }
 
@@ -36,8 +99,10 @@ export default function ProductDetail() {
         ? `PROD-${producto.categoria.substring(0,3).toUpperCase()}-${producto.id.substring(0,4).toUpperCase()}`
         : `PROD-GEN-${producto.id.substring(0,4).toUpperCase()}`);
       
-      const message = `Hola, me interesa encargar este producto mediante pago por SINPE Móvil:\n\n*${producto.titulo}*\nSKU: ${sku}\nCantidad: ${cantidad}\nVariante/Talla: ${talla}\n\nPrecio Final c/u: ₡${producto.precio_cr?.toLocaleString('es-CR')}\n\nEnlace original: ${producto.url_original}`;
-      const whatsappUrl = `https://wa.me/50664435508?text=${encodeURIComponent(message)}`;
+      const destinoStr = envioDestino === 'ticotrae' ? 'Casillero TicoTrae' : `Mi Casillero Personal (${direccionPersonal || 'No especificada'})`;
+      const message = `Hola TicoTrae, quiero pedir el artículo ${producto.titulo}${producto.asin ? ` (ASIN: ${producto.asin})` : ''}. El método de envío seleccionado es: ${destinoStr}. Talla: ${talla}. Cantidad: ${cantidad}. Link: ${window.location.href.split('?')[0]}`;
+      const baseWaUrl = globalWhatsappUrl.includes('?') ? `${globalWhatsappUrl}&` : `${globalWhatsappUrl}?`;
+      const whatsappUrl = `${baseWaUrl}text=${encodeURIComponent(message)}`;
       window.open(whatsappUrl, '_blank');
       
       // Remove query string to avoid re-triggering
@@ -53,15 +118,40 @@ export default function ProductDetail() {
       if (docSnap.exists()) {
         const prodData = { id: docSnap.id, ...docSnap.data() } as Producto;
         setProducto(prodData);
+        if (prodData.peso_kg) {
+          setPesoKg(prodData.peso_kg);
+        }
         
         // Fetch recomendaciones
         if (prodData.categoria) {
            const getRecs = async () => {
+             // Fallback logic
              const qRecs = query(
                collection(db, 'productos'),
                where('categoria', '==', prodData.categoria),
                limit(5)
              );
+             // We'll try the smart recommendation engine
+             try {
+               const history = localStorage.getItem('user_history');
+               const parsedHistory = history ? JSON.parse(history) : [];
+               
+               const RENDER_URL = import.meta.env.VITE_BACKEND_URL || "";
+               const response = await fetch(`${RENDER_URL}/api/recommend`, {
+                 method: 'POST',
+                 headers: { 'Content-Type': 'application/json' },
+                 body: JSON.stringify({ current_product: prodData, user_history: parsedHistory })
+               });
+               if (response.ok) {
+                 const data = await response.json();
+                 if (Array.isArray(data)) {
+                   setAiRecomendaciones(data);
+                 }
+               }
+             } catch (e) {
+                console.error(e);
+             }
+
              const recsSnap = await getDocs(qRecs);
              const recs: Producto[] = [];
              recsSnap.forEach(d => {
@@ -146,10 +236,26 @@ export default function ProductDetail() {
     : `PROD-GEN-${producto.id.substring(0,4).toUpperCase()}`);
 
   // Whatsapp logic with quantity and variant
-  const message = `Hola, me interesa encargar este producto mediante pago por SINPE Móvil:\n\n*${producto.titulo}*\nSKU: ${sku}\nCantidad: ${cantidad}\nVariante/Talla: ${talla}\n\nPrecio Final c/u: ₡${producto.precio_cr?.toLocaleString('es-CR')}\n\nEnlace original: ${producto.url_original}`;
-  const whatsappUrl = `https://wa.me/50664435508?text=${encodeURIComponent(message)}`;
+  const message = `Hola TicoTrae, me interesa el producto ${producto.titulo}`;
+  const baseWaUrl2 = globalWhatsappUrl.includes('?') ? `${globalWhatsappUrl}&` : `${globalWhatsappUrl}?`;
+  const whatsappUrl = `${baseWaUrl2}text=${encodeURIComponent(message)}`;
 
-  const images = (producto.imagenes && producto.imagenes.length > 0) ? producto.imagenes : [producto.imagen_url];
+  const rawImages = [producto.imagen_url, ...(producto.imagenes || [])].filter(Boolean);
+  
+  const cleanImageUrl = (u: string) => {
+    if (!u) return "";
+    if (u.includes("amazon.com") || u.includes("images-amazon.com") || /m\.media-amazon\.com/.test(u)) {
+      return u.replace(/\._[A-Za-z0-9_,-]+_\./g, '.');
+    }
+    if (u.includes("ebayimg.com")) {
+      return u.replace(/s-l[0-9]+\./g, 's-l1600.');
+    }
+    return u;
+  };
+
+  const images = Array.from(
+    new Set(rawImages.filter(Boolean).map(cleanImageUrl))
+  );
 
   const nextImage = () => setCurrentImageIdx(p => (p + 1) % images.length);
   const prevImage = () => setCurrentImageIdx(p => (p - 1 + images.length) % images.length);
@@ -177,7 +283,12 @@ export default function ProductDetail() {
       console.error(e);
     }
 
-    window.open(whatsappUrl, '_blank');
+    const destinoStr = envioDestino === 'ticotrae' ? 'Casillero TicoTrae' : `Mi Casillero Personal (${direccionPersonal || 'No especificada'})`;
+    const messageInfo = `Hola TicoTrae, quiero pedir el artículo ${producto.titulo}${producto.asin ? ` (ASIN: ${producto.asin})` : ''}. El método de envío seleccionado es: ${destinoStr}. Talla: ${talla}. Cantidad: ${cantidad}. Link: ${window.location.href}`;
+    const baseWaUrl2 = globalWhatsappUrl.includes('?') ? `${globalWhatsappUrl}&` : `${globalWhatsappUrl}?`;
+    const finalWaUrl = `${baseWaUrl2}text=${encodeURIComponent(messageInfo)}`;
+
+    window.open(finalWaUrl, '_blank');
   };
 
   // Parse tallas if available
@@ -185,8 +296,29 @@ export default function ProductDetail() {
     ? producto.tallas.split(',').map(t => t.trim()).filter(t => t) 
     : [];
 
+  const catLower = producto.categoria?.toLowerCase() || '';
+  const tituloLower = producto.titulo?.toLowerCase() || '';
+  const isShoes = catLower.includes('zapat') || catLower.includes('tenis') || catLower.includes('calzad') || tituloLower.includes('zapat') || tituloLower.includes('tenis');
+  const isClothes = catLower.includes('ropa') || catLower.includes('camis') || catLower.includes('pantal') || tituloLower.includes('camis') || catLower.includes('vestid') || tituloLower.includes('ropa');
+
+  const defaultTallasGen = isShoes ? (
+    ['US 5', 'US 5.5', 'US 6', 'US 6.5', 'US 7', 'US 7.5', 'US 8', 'US 8.5', 'US 9', 'US 9.5', 'US 10', 'US 10.5', 'US 11', 'US 11.5', 'US 12', 'US 12.5', 'US 13']
+  ) : isClothes ? (
+    ['XS', 'S', 'M', 'L', 'XL', 'XXL']
+  ) : ['Estándar'];
+
+  // Calculations
+  const calcPrecioUsd = producto?.precio_usd || 0;
+  const calcCostoBase = calcPrecioUsd + envioUsa;
+  const calcCuotaGarantia = calcCostoBase * 0.020815;
+  const calcEnvioMiamiCR = pesoKg * 8;
+  const calcEnvioLocalCR = envioDestino === 'ticotrae' ? (pesoKg * 9) : 0;
+  
+  const calcTotalUSD = calcCostoBase + calcCuotaGarantia + calcEnvioMiamiCR + calcEnvioLocalCR + ganancia;
+  const calcTotalCRC = calcTotalUSD * tipoCambio;
+
   return (
-    <div className="flex flex-col gap-8 max-w-4xl mx-auto pb-10">
+    <div className="flex flex-col gap-8 max-w-6xl mx-auto pb-10">
       <Link to="/" className="inline-flex items-center gap-2 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors w-max">
         <ArrowLeft size={18} />
         Volver al Catálogo
@@ -294,12 +426,12 @@ export default function ProductDetail() {
                   {producto.marca}
                 </div>
               )}
-              {((producto.tienda_origen || (producto.url_original.toLowerCase().includes('amazon') ? 'amazon' : producto.url_original.toLowerCase().includes('ebay') ? 'ebay' : 'otra')) === 'amazon') && (
+              {((producto.tienda_origen || (producto.url_original?.toLowerCase().includes('amazon') ? 'amazon' : producto.url_original?.toLowerCase().includes('ebay') ? 'ebay' : 'otra')) === 'amazon') && (
                 <div className="bg-[#FF9900] text-gray-900 px-2 py-0.5 rounded text-[10px] uppercase font-black tracking-widest shadow-sm">
                   Amazon
                 </div>
               )}
-              {((producto.tienda_origen || (producto.url_original.toLowerCase().includes('amazon') ? 'amazon' : producto.url_original.toLowerCase().includes('ebay') ? 'ebay' : 'otra')) === 'ebay') && (
+              {((producto.tienda_origen || (producto.url_original?.toLowerCase().includes('amazon') ? 'amazon' : producto.url_original?.toLowerCase().includes('ebay') ? 'ebay' : 'otra')) === 'ebay') && (
                 <div className="bg-[#E53238] text-white px-2 py-0.5 rounded text-[10px] uppercase font-black tracking-widest shadow-sm">
                   eBay
                 </div>
@@ -328,199 +460,341 @@ export default function ProductDetail() {
               <span className="text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Precio Final</span>
               <div className="flex items-end gap-3">
                 <span className="text-4xl font-bold text-blue-600 dark:text-blue-400">
-                  ₡{producto.precio_cr?.toLocaleString('es-CR')}
+                  ₡{Math.round(calcTotalCRC).toLocaleString('es-CR')}
                 </span>
                 {producto.isDailyDeal && (
                   <span className="text-lg text-gray-400 line-through dark:text-gray-500 mb-1">
-                    ₡{(producto.precio_cr * 2).toLocaleString('es-CR')}
+                    ₡{(Math.round(calcTotalCRC) * 2).toLocaleString('es-CR')}
                   </span>
                 )}
               </div>
               <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Puesto en Costa Rica (Todo incluido)</span>
             </div>
 
-            {/* Price Comparison Table & Chart */}
-            <div className="bg-white dark:bg-slate-700 rounded-xl border border-gray-200 dark:border-slate-600 shadow-sm overflow-hidden flex flex-col">
-              <div className="p-4 border-b border-gray-100 dark:border-slate-600">
-                <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-3">Análisis de Precio</h3>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm text-left">
-                    <thead className="text-xs text-gray-500 dark:text-gray-400 uppercase bg-gray-50 dark:bg-slate-800">
-                      <tr>
-                        <th className="px-3 py-2 rounded-tl-lg">Concepto</th>
-                        <th className="px-3 py-2 rounded-tr-lg text-right">Monto</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100 dark:divide-slate-600/50">
-                      <tr className="hover:bg-gray-50 dark:hover:bg-slate-700/50">
-                        <td className="px-3 py-2 font-medium text-gray-900 dark:text-gray-200">
-                          Precio Original {producto.tienda_origen ? `(${producto.tienda_origen.charAt(0).toUpperCase() + producto.tienda_origen.slice(1)})` : ''}
-                        </td>
-                        <td className="px-3 py-2 text-right text-gray-700 dark:text-gray-300">${producto.precio_usd.toFixed(2)}</td>
-                      </tr>
-                      {producto.peso_kg && producto.peso_kg > 0 && (
+            {/* Price Analysis Section */}
+            {isAdmin ? (
+              <div className="bg-white dark:bg-slate-700 rounded-xl border border-gray-200 dark:border-slate-600 shadow-sm overflow-hidden flex flex-col">
+                <div className="p-4 border-b border-gray-100 dark:border-slate-600">
+                  <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-3">Análisis de Precio (Admin)</h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                      <thead className="text-xs text-gray-500 dark:text-gray-400 uppercase bg-gray-50 dark:bg-slate-800">
+                        <tr>
+                          <th className="px-3 py-2 rounded-tl-lg">Concepto</th>
+                          <th className="px-3 py-2 text-right">USD</th>
+                          <th className="px-3 py-2 rounded-tr-lg text-right">CRC</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 dark:divide-slate-600/50">
                         <tr className="hover:bg-gray-50 dark:hover:bg-slate-700/50">
-                          <td className="px-3 py-2 text-gray-600 dark:text-gray-400 flex items-center gap-1.5">
-                            <Truck size={14} className="text-gray-400" />
-                            Envío estimado ({producto.peso_kg}kg)
+                          <td className="px-3 py-2 font-medium text-gray-900 dark:text-gray-200">
+                            Precio Original {producto.tienda_origen ? `(${producto.tienda_origen.charAt(0).toUpperCase() + producto.tienda_origen.slice(1)})` : ''}
                           </td>
-                          <td className="px-3 py-2 text-right text-gray-600 dark:text-gray-400">
-                            + ₡{Math.round(producto.peso_kg * (producto.costo_por_kg || 4000)).toLocaleString('es-CR')}
+                          <td className="px-3 py-2 text-right text-gray-700 dark:text-gray-300">
+                            ${calcPrecioUsd.toFixed(2)}
+                          </td>
+                          <td className="px-3 py-2 text-right text-gray-700 dark:text-gray-300">
+                            ₡{(calcPrecioUsd * tipoCambio).toLocaleString('es-CR')}
                           </td>
                         </tr>
-                      )}
-                      <tr className="bg-blue-50/50 dark:bg-slate-800/50 font-bold">
-                        <td className="px-3 py-3 text-gray-900 dark:text-white">Precio Final (Calculado)</td>
-                        <td className="px-3 py-3 text-right text-blue-600 dark:text-blue-400">
-                          ₡{producto.precio_cr?.toLocaleString('es-CR')}
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
+                        
+                        <tr className="hover:bg-gray-50 dark:hover:bg-slate-700/50">
+                          <td className="px-3 py-2 font-medium text-gray-900 dark:text-gray-200 flex items-center gap-2">
+                            <Truck size={14} className="text-gray-400" />
+                            Envío USA a Miami
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <span className="text-gray-500">$</span>
+                              <input type="number" min="0" value={envioUsa} onChange={e => setEnvioUsa(Number(e.target.value) || 0)} className="w-16 text-right border border-gray-200 dark:border-slate-600 rounded bg-white dark:bg-slate-800 px-1 py-0.5 text-gray-700 dark:text-white" />
+                            </div>
+                          </td>
+                          <td className="px-3 py-2 text-right text-gray-700 dark:text-gray-300">
+                            ₡{(envioUsa * tipoCambio).toLocaleString('es-CR')}
+                          </td>
+                        </tr>
+
+                        <tr className="hover:bg-gray-50 dark:hover:bg-slate-700/50">
+                          <td className="px-3 py-2 text-gray-600 dark:text-gray-400 flex items-center gap-2">
+                            <Percent size={14} className="text-gray-400" />
+                            Garantía T/C (2.0815%)
+                          </td>
+                          <td className="px-3 py-2 text-right text-gray-700 dark:text-gray-300">
+                            ${calcCuotaGarantia.toFixed(2)}
+                          </td>
+                          <td className="px-3 py-2 text-right text-gray-700 dark:text-gray-300">
+                            ₡{(calcCuotaGarantia * tipoCambio).toLocaleString('es-CR')}
+                          </td>
+                        </tr>
+                        
+                        <tr className="hover:bg-gray-50 dark:hover:bg-slate-700/50">
+                          <td className="px-3 py-2 text-gray-600 dark:text-gray-400 flex items-center gap-2">
+                            <Truck size={14} className="text-gray-400" />
+                            Envío a CR ({pesoKg}kg x $8)
+                          </td>
+                          <td className="px-3 py-2 text-right text-gray-700 dark:text-gray-300">
+                            ${calcEnvioMiamiCR.toFixed(2)}
+                          </td>
+                          <td className="px-3 py-2 text-right text-gray-600 dark:text-gray-400">
+                            ₡{(calcEnvioMiamiCR * tipoCambio).toLocaleString('es-CR')}
+                          </td>
+                        </tr>
+                        
+                        {envioDestino === 'ticotrae' && (
+                          <tr className="hover:bg-gray-50 dark:hover:bg-slate-700/50">
+                            <td className="px-3 py-2 text-gray-600 dark:text-gray-400 flex items-center gap-2">
+                              <Truck size={14} className="text-gray-400" />
+                              Correos CR ({pesoKg}kg x $9)
+                            </td>
+                            <td className="px-3 py-2 text-right text-gray-700 dark:text-gray-300">
+                              ${calcEnvioLocalCR.toFixed(2)}
+                            </td>
+                            <td className="px-3 py-2 text-right text-gray-600 dark:text-gray-400">
+                              ₡{(calcEnvioLocalCR * tipoCambio).toLocaleString('es-CR')}
+                            </td>
+                          </tr>
+                        )}
+                        
+                        <tr className="hover:bg-gray-50 dark:hover:bg-slate-700/50 bg-blue-50/20 dark:bg-slate-800/20">
+                          <td className="px-3 py-2 font-medium text-gray-900 dark:text-gray-200">
+                             <div className="flex items-center gap-2">
+                               <Calculator size={14} className="text-blue-500 dark:text-blue-400" />
+                               Ganancia TicoTrae
+                             </div>
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <span className="text-blue-500 font-bold">$</span>
+                              <input type="number" min="0" value={ganancia} onChange={e => setGanancia(Number(e.target.value) || 0)} className="w-16 text-right border-blue-200 dark:border-blue-800 border rounded bg-white dark:bg-slate-800 px-1 py-0.5 text-blue-600 dark:text-blue-400 font-bold" />
+                            </div>
+                          </td>
+                          <td className="px-3 py-2 text-right text-blue-600 dark:text-blue-400">
+                             ₡{(ganancia * tipoCambio).toLocaleString('es-CR')}
+                          </td>
+                        </tr>
+                        
+                        <tr className="bg-blue-50 dark:bg-slate-800 font-black">
+                           <td className="px-3 py-3 text-gray-900 dark:text-white flex flex-col gap-1">
+                             <span>Precio Final Total</span>
+                             <div className="text-[10px] font-medium text-gray-500 dark:text-gray-400 flex flex-wrap items-center gap-2 mt-0.5">
+                               <div className="flex items-center gap-1">
+                                 <span>T/C:</span>
+                                 <input type="number" value={tipoCambio} onChange={e => setTipoCambio(Number(e.target.value) || 515)} className="w-14 text-center border border-gray-200 dark:border-slate-600 rounded bg-white dark:bg-slate-700 py-0.5 text-gray-700 dark:text-white" />
+                               </div>
+                               <div className="flex items-center gap-1">
+                                 <span>Peso (kg):</span>
+                                 <input type="number" step="0.1" min="0" value={pesoKg} onChange={e => setPesoKg(Number(e.target.value) || 1)} className="w-12 text-center border border-gray-200 dark:border-slate-600 rounded bg-white dark:bg-slate-700 py-0.5 text-gray-700 dark:text-white" />
+                               </div>
+                             </div>
+                           </td>
+                          <td className="px-3 py-3 text-right text-blue-700 dark:text-blue-400 text-lg">
+                            ${calcTotalUSD.toFixed(2)}
+                          </td>
+                          <td className="px-3 py-3 text-right text-blue-700 dark:text-blue-400 text-xl whitespace-nowrap">
+                            ₡{Math.round(calcTotalCRC).toLocaleString('es-CR')}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                
+                <div className="p-4 bg-gray-50/50 dark:bg-slate-800/30">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Tendencia Histórica</span>
+                  </div>
+                  <div className="h-[120px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={priceHistoryData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" className="dark:opacity-10" />
+                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#9ca3af' }} dy={5} />
+                        <YAxis hide={true} domain={['dataMin - 1000', 'dataMax + 1000']} />
+                        <Tooltip 
+                          contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', fontSize: '12px' }}
+                          formatter={(value: any) => [`₡${Number(value).toLocaleString('es-CR')}`, 'Precio']}
+                          labelStyle={{ color: '#6b7280', marginBottom: '4px' }}
+                        />
+                        <Line 
+                          type="monotone" 
+                          dataKey="precio" 
+                          stroke="#2563eb" 
+                          strokeWidth={2}
+                          dot={{ r: 3, fill: '#2563eb', strokeWidth: 2, stroke: '#fff' }}
+                          activeDot={{ r: 5, strokeWidth: 0 }}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
                 </div>
               </div>
-              
-              <div className="p-4 bg-gray-50/50 dark:bg-slate-800/30">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Tendencia Histórica</span>
-                </div>
-                <div className="h-[120px] w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={priceHistoryData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" className="dark:opacity-10" />
-                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#9ca3af' }} dy={5} />
-                      <YAxis hide={true} domain={['dataMin - 1000', 'dataMax + 1000']} />
-                      <Tooltip 
-                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', fontSize: '12px' }}
-                        formatter={(value: number) => [`₡${value.toLocaleString('es-CR')}`, 'Precio']}
-                        labelStyle={{ color: '#6b7280', marginBottom: '4px' }}
-                      />
-                      <Line 
-                        type="monotone" 
-                        dataKey="precio" 
-                        stroke="#2563eb" 
-                        strokeWidth={2}
-                        dot={{ r: 3, fill: '#2563eb', strokeWidth: 2, stroke: '#fff' }}
-                        activeDot={{ r: 5, strokeWidth: 0 }}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
+            ) : (
+              <div className="bg-white dark:bg-slate-700 rounded-xl border border-gray-200 dark:border-slate-600 shadow-sm overflow-hidden p-5 flex flex-col gap-4">
+                <h3 className="text-sm font-bold text-gray-900 dark:text-white border-b border-gray-100 dark:border-slate-600 pb-2">Desglose del Precio Final</h3>
+                <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-3">
+                  <li className="flex justify-between items-center">
+                    <span>Costo del Producto</span>
+                    <span className="font-semibold text-gray-900 dark:text-gray-200">₡{Math.round(calcPrecioUsd * tipoCambio).toLocaleString('es-CR')}</span>
+                  </li>
+                  <li className="flex justify-between items-center">
+                    <span>Gastos de importación, flete y gestión</span>
+                    <span className="font-semibold text-gray-900 dark:text-gray-200">₡{Math.round((calcTotalCRC) - (calcPrecioUsd * tipoCambio)).toLocaleString('es-CR')}</span>
+                  </li>
+                </ul>
+                <div className="mt-1 pt-3 border-t border-gray-100 dark:border-slate-600 flex items-center gap-2 text-xs text-blue-600 dark:text-blue-400 font-semibold bg-blue-50 dark:bg-blue-900/20 p-2.5 rounded-lg">
+                  <ShieldCheck size={18} className="shrink-0" />
+                  <span className="leading-relaxed">Tu compra está 100% protegida. Este monto incluye todos los costos hasta llegar a tus manos o a tu propio casillero.</span>
                 </div>
               </div>
-            </div>
+            )}
 
             {/* Componente de Conversión / Call to Action */}
             <div className="bg-white dark:bg-slate-700 p-6 rounded-2xl border border-gray-200 dark:border-slate-600 shadow-sm mb-6 flex flex-col gap-4">
               
-              <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Variante / Talla</label>
-                <select 
-                  value={talla}
-                  onChange={(e) => setTalla(e.target.value)}
-                  className="w-full border border-gray-300 dark:border-slate-600 dark:bg-slate-800 dark:text-white rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                >
-                  {tallasArray.length > 0 ? (
-                    tallasArray.map(t => (
-                      <option key={t} value={t}>{t}</option>
-                    ))
-                  ) : (
-                    <>
-                      <option value="Estándar">Estándar</option>
-                      <option value="S">Talla S</option>
-                      <option value="M">Talla M</option>
-                      <option value="L">Talla L</option>
-                      <option value="XL">Talla XL</option>
-                    </>
-                  )}
-                </select>
+              <div className="flex flex-col gap-3 pb-3 border-b border-gray-100 dark:border-slate-600">
+                <label className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-1">
+                  ¿Dónde quieres recibir esto?
+                </label>
+                
+                <div className="flex bg-gray-100 dark:bg-slate-800 p-1 rounded-xl">
+                  <button
+                    onClick={() => setEnvioDestino('ticotrae')}
+                    className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-all ${envioDestino === 'ticotrae' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
+                  >
+                    Casillero TicoTrae
+                  </button>
+                  <button
+                    onClick={() => setEnvioDestino('personal')}
+                    className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-all ${envioDestino === 'personal' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
+                  >
+                    Mi propio casillero
+                  </button>
+                </div>
+
+                {envioDestino === 'ticotrae' && (
+                  <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-100 dark:border-blue-800/50 mt-1">
+                    <p className="text-xs text-blue-800 dark:text-blue-300">
+                      TicoTrae se encarga de la importación y te lo entrega en la puerta de tu casa. Tarifa estimada basada en peso.
+                    </p>
+                  </div>
+                )}
+
+                {envioDestino === 'personal' && (
+                  <div className="mt-1">
+                    <label className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1 block">
+                      Ingresa la dirección de tu casillero (Miami)
+                    </label>
+                    <input
+                      type="text"
+                      value={direccionPersonal}
+                      onChange={(e) => setDireccionPersonal(e.target.value)}
+                      placeholder="Ej. 1234 NW 89TH CT, Miami, FL"
+                      className="w-full border border-gray-300 dark:border-slate-600 dark:bg-slate-800 dark:text-white rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                    />
+                  </div>
+                )}
               </div>
 
-              <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Cantidad</label>
-                <div className="flex items-center">
-                  <button 
-                    onClick={() => setCantidad(c => Math.max(1, c - 1))}
-                    className="w-10 h-10 border border-gray-300 dark:border-slate-600 rounded-l-lg bg-gray-50 dark:bg-slate-800 text-gray-600 dark:text-gray-300 flex items-center justify-center hover:bg-gray-100 dark:hover:bg-slate-700"
+              <div className="flex gap-4 mb-2">
+                <div className="flex-1 flex flex-col gap-1.5">
+                  <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Talla</label>
+                  <select 
+                    value={talla}
+                    onChange={(e) => setTalla(e.target.value)}
+                    className="w-full border border-gray-300 dark:border-slate-600 dark:bg-slate-800 dark:text-white rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                   >
-                    -
-                  </button>
-                  <input 
-                    type="number" 
-                    value={cantidad}
-                    onChange={(e) => setCantidad(Math.max(1, parseInt(e.target.value) || 1))}
-                    className="w-16 h-10 border-y border-gray-300 dark:border-slate-600 dark:bg-slate-800 dark:text-white text-center text-sm font-medium focus:outline-none"
-                  />
-                  <button 
-                    onClick={() => setCantidad(c => c + 1)}
-                    className="w-10 h-10 border border-gray-300 dark:border-slate-600 rounded-r-lg bg-gray-50 dark:bg-slate-800 text-gray-600 dark:text-gray-300 flex items-center justify-center hover:bg-gray-100 dark:hover:bg-slate-700"
-                  >
-                    +
-                  </button>
+                    {tallasArray.length > 0 ? (
+                      tallasArray.map(t => (
+                        <option key={t} value={t}>{t}</option>
+                      ))
+                    ) : (
+                      defaultTallasGen.map(t => (
+                        <option key={t} value={t}>{t}</option>
+                      ))
+                    )}
+                  </select>
+                </div>
+
+                <div className="flex-1 flex flex-col gap-1.5">
+                  <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Cantidad</label>
+                  <div className="flex items-center">
+                    <button 
+                      onClick={() => setCantidad(c => Math.max(1, c - 1))}
+                      className="w-10 h-[42px] border border-gray-300 dark:border-slate-600 rounded-l-lg bg-gray-50 dark:bg-slate-800 text-gray-600 dark:text-gray-300 flex items-center justify-center hover:bg-gray-100 dark:hover:bg-slate-700"
+                    >
+                      -
+                    </button>
+                    <input 
+                      type="number" 
+                      value={cantidad}
+                      onChange={(e) => setCantidad(Math.max(1, parseInt(e.target.value) || 1))}
+                      className="w-full h-[42px] border-y border-gray-300 dark:border-slate-600 dark:bg-slate-800 dark:text-white text-center text-sm font-medium focus:outline-none"
+                    />
+                    <button 
+                      onClick={() => setCantidad(c => c + 1)}
+                      className="w-10 h-[42px] border border-gray-300 dark:border-slate-600 rounded-r-lg bg-gray-50 dark:bg-slate-800 text-gray-600 dark:text-gray-300 flex items-center justify-center hover:bg-gray-100 dark:hover:bg-slate-700"
+                    >
+                      +
+                    </button>
+                  </div>
                 </div>
               </div>
 
-              <button 
-                onClick={handleBuy}
-                className="w-full mt-4 bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold py-3.5 px-6 rounded-xl text-base transition-colors flex items-center justify-center gap-2 shadow-sm"
-              >
-                <MessageCircle size={20} />
-                Pedir por WhatsApp (+506 6443-5508)
-              </button>
-              <p className="text-xs text-center text-gray-500 dark:text-gray-400 mt-2">
-                *Serás redirigido a WhatsApp para confirmar el pedido.
-              </p>
+              <div className="flex flex-col gap-3 mt-2">
+                <button 
+                  onClick={handleBuy}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 px-6 rounded-xl text-sm transition-colors flex items-center justify-center gap-2 shadow-sm"
+                >
+                  <MessageCircle size={18} />
+                  Pedir por WhatsApp (Gestión TicoTrae)
+                </button>
+                
+                <AmazonAffiliateButton 
+                  asin={producto.asin}
+                  originalUrl={producto.url_original || '#'}
+                />
+              </div>
             </div>
 
             <div className="flex flex-col gap-3">
-              
-              <a 
-                href={producto.url_original} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="w-full bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-300 font-bold py-3 px-6 rounded-xl text-sm transition-colors flex items-center justify-center gap-2 border border-gray-200 dark:border-slate-700 shadow-sm"
-              >
-                <ExternalLink size={18} />
-                Ver original en Amazon
-              </a>
-
-              {/* Social Share */}
-              <div className="pt-3 border-t border-gray-100 dark:border-slate-700 mt-1">
-                <span className="text-xs font-semibold text-gray-400 mb-3 flex items-center gap-1.5 uppercase tracking-wider">
-                  <Share2 size={14} /> Compartir
-                </span>
-                <div className="flex items-center gap-3">
-                  <a 
-                    href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(window.location.href)}`}
-                    target="_blank" rel="noopener noreferrer"
-                    title="Compartir en Facebook"
-                    className="p-3 bg-gray-50 dark:bg-slate-700 hover:bg-[#1877F2]/10 text-gray-500 hover:text-[#1877F2] rounded-xl transition-all flex items-center justify-center group flex-1 border border-gray-100 dark:border-slate-600 hover:border-[#1877F2]/20 shadow-sm"
-                  >
-                    <Facebook size={20} className="group-hover:scale-110 transition-transform" />
-                  </a>
-                  <a 
-                    href={`https://twitter.com/intent/tweet?text=${encodeURIComponent('¡Mira este producto en TicoTrae! ' + producto.titulo)}&url=${encodeURIComponent(window.location.href)}`}
-                    target="_blank" rel="noopener noreferrer"
-                    title="Compartir en X"
-                    className="p-3 bg-gray-50 dark:bg-slate-700 hover:bg-black/10 text-gray-500 dark:hover:text-white hover:text-black rounded-xl transition-all flex items-center justify-center group flex-1 border border-gray-100 dark:border-slate-600 hover:border-black/20 shadow-sm"
-                  >
-                    <Twitter size={20} className="group-hover:scale-110 transition-transform" />
-                  </a>
-                  <a 
-                    href={`https://wa.me/?text=${encodeURIComponent('¡Mira este increíble producto en TicoTrae!\n\n*' + producto.titulo + '*\n\n' + window.location.href)}`}
-                    target="_blank" rel="noopener noreferrer"
-                    title="Compartir en WhatsApp"
-                    className="p-3 bg-gray-50 dark:bg-slate-700 hover:bg-[#25D366]/10 text-gray-500 hover:text-[#25D366] rounded-xl transition-all flex items-center justify-center group flex-1 border border-gray-100 dark:border-slate-600 hover:border-[#25D366]/20 shadow-sm"
-                  >
-                    <MessageCircle size={20} className="group-hover:scale-110 transition-transform" />
-                  </a>
-                </div>
-              </div>
+              <ShareAmazonAffiliate 
+                url={producto.url_original || ''} 
+                productName={producto.titulo}
+              />
             </div>
           </div>
         </div>
       </div>
 
-      {/* Motor de Recomendaciones (Cross-Selling) */}
+      {/* Motor de Recomendaciones de IA (Cross-Selling) */}
+      {aiRecomendaciones.length > 0 && (
+        <div className="bg-gradient-to-br from-indigo-50 to-blue-50 dark:from-slate-800 dark:to-indigo-900/30 rounded-3xl border border-indigo-100 dark:border-indigo-800/50 shadow-sm overflow-hidden p-6 sm:p-8 mt-4">
+          <div className="flex items-center gap-2 mb-6">
+            <Sparkles className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white">Los clientes que vieron este producto también vieron:</h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+             {aiRecomendaciones.map(aiRec => (
+               <div key={aiRec.id} className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-2xl p-5 border border-white/40 dark:border-slate-600/50 shadow-sm flex flex-col">
+                 <span className="text-[10px] uppercase font-bold tracking-wider text-indigo-600 dark:text-indigo-400 mb-2">{aiRec.category}</span>
+                 <h3 className="font-semibold text-gray-900 dark:text-white text-sm mb-3 flex-grow">{aiRec.name}</h3>
+                 <div className="flex items-center gap-2 mb-3 bg-indigo-50/50 dark:bg-slate-900/50 p-2.5 rounded-xl border border-indigo-100/50 dark:border-slate-700/50">
+                    <TrendingUp className="w-4 h-4 text-indigo-500 shrink-0" />
+                    <p className="text-xs text-gray-600 dark:text-gray-300 italic">
+                      "{aiRec.coincidence_reason}"
+                    </p>
+                 </div>
+                 <div className="flex justify-between items-center mt-auto">
+                    <span className="text-sm font-bold text-gray-900 dark:text-white">
+                      {aiRec.price_crc ? `~₡${aiRec.price_crc.toLocaleString('es-CR')}` : 'Precio Variable'}
+                    </span>
+                 </div>
+               </div>
+             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Motor de Recomendaciones General (Cross-Selling) */}
       {recomendaciones.length > 0 && (
         <div className="bg-white dark:bg-slate-800 rounded-3xl border border-gray-200 dark:border-slate-700 shadow-sm overflow-hidden p-6 sm:p-8 mt-4">
           <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6">También te podría interesar</h2>

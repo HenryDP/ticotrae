@@ -1,26 +1,27 @@
 {
-  "manifest_version": 3,
-  "name": "TicoTrae",
-  "version": "1.0",
-  "description": "Captura productos de Amazon y los envía a tu PWA.",
-  "permissions": [
-    "activeTab",
-    "scripting"
-  ],
-  "host_permissions": [
-    "https://www.amazon.com/*"
-  ],
-  "action": {
-    "default_popup": "popup.html",
-    "default_icon": "icon.png"
-  },
-  "content_scripts": [
+  "name": "TicoTraeCR - Compras en CR",
+  "short_name": "TicoTraeCR",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#ffffff",
+  "description": "Captura y publica productos de Amazon en CR",
+  "icons": [
     {
-      "matches": ["https://www.amazon.com/*"],
-      "js": ["content.js"]
+      "src": "/logo.jpg",
+      "sizes": "any",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/logo.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg"
+    },
+    {
+      "src": "/logo.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg"
     }
-  ],
-  "content_security_policy": {
-    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';"
-  }
+  ]
 }

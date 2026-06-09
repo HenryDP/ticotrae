@@ -152,13 +152,34 @@ export default function Profile() {
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Tu Perfil</h2>
             <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">Información de envío para Costa Rica</p>
           </div>
-          <button 
-            onClick={handleLogout}
-            className="text-gray-500 dark:text-gray-400 hover:text-cr-red flex items-center gap-2 text-sm font-medium transition"
-          >
-            <LogOut size={16} /> Cerrar Sesión
-          </button>
+          <div className="flex items-center gap-4">
+            <a 
+              href="https://www.amazon.com/your-orders/orders"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hidden sm:flex text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 items-center gap-2 text-sm font-semibold transition"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>
+              Rastrear mis Pedidos en Amazon
+            </a>
+            <button 
+              onClick={handleLogout}
+              className="text-gray-500 dark:text-gray-400 hover:text-cr-red flex items-center gap-2 text-sm font-medium transition"
+            >
+              <LogOut size={16} /> Cerrar Sesión
+            </button>
+          </div>
         </div>
+
+        <a 
+          href="https://www.amazon.com/your-orders/orders"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="sm:hidden mb-8 w-full bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/40 p-4 rounded-xl flex items-center justify-center gap-3 font-semibold transition border border-blue-100 dark:border-blue-800"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21 16-4 4-4-4"/><path d="M17 2v18"/><path d="m3 8 4-4 4 4"/><path d="M7 22V4"/></svg>
+          Rastrear mis paquetes en Amazon
+        </a>
 
         {message && (
           <div className="bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 p-4 rounded-xl text-sm font-medium mb-6">

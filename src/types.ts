@@ -13,25 +13,34 @@ export interface GeneralSettings {
   logoUrl?: string;
   primaryColor?: string;
   description?: string;
+  termsConditions?: string;
+  privacyPolicy?: string;
+  shippingPolicy?: string;
+  globalTc?: number;
+  globalMargen?: number;
 }
 
-export const CATEGORIAS = [
-  "Electrónica",
-  "Computación",
-  "Hogar y Cocina",
-  "Ropa y Accesorios",
-  "Salud y Belleza",
-  "Juguetes",
-  "Deportes",
-  "Herramientas",
-  "Otros"
-] as const;
+export const DEPARTAMENTOS = {
+  "Mujer": ["Ropa", "Calzado", "Accesorios", "Joyas", "Belleza"],
+  "Hombre": ["Ropa", "Calzado", "Accesorios", "Relojes", "Cuidado Personal"],
+  "Niñ@s": ["Ropa de Niña", "Ropa de Niño", "Calzado", "Juguetes", "Bebés"],
+  "Electrónica": ["Celulares y Accesorios", "Computadoras", "Audio", "Smartwatches", "Hogar Inteligente"],
+  "Hogar y Cocina": ["Electrodomésticos", "Decoración", "Cocina", "Muebles"],
+  "Salud y Deportes": ["Ejercicio", "Nutrición", "Deportes", "Cuidado Personal"]
+};
 
+export const CATEGORIAS = Object.entries(DEPARTAMENTOS).flatMap(([dep, subcats]) => 
+  subcats.map(sub => `${dep} - ${sub}`)
+);
+CATEGORIAS.push("Otros");
+
+export type Departamento = keyof typeof DEPARTAMENTOS;
 export type Categoria = typeof CATEGORIAS[number];
 
 export interface Producto {
   id: string;
   sku?: string;
+  asin?: string;
   titulo: string;
   descripcion?: string;
   tallas?: string;
@@ -42,9 +51,16 @@ export interface Producto {
   precio_cr?: number;
   peso_kg?: number;
   costo_por_kg?: number;
+  envio_usa_miami?: number;
+  porcentaje_garantia?: number;
+  tarifa_envio_cr?: number;
+  tarifa_correos_cr?: number;
+  ganancia?: number;
+  tipo_cambio?: number;
   categoria?: string;
   marca?: string;
   tienda_origen?: "amazon" | "ebay" | "otra";
+  metodo_venta?: 'Afiliado' | 'Intermediario';
   isDailyDeal?: boolean;
   discountPercentage?: number;
   estado: "pendiente" | "publicado";
@@ -63,6 +79,9 @@ export interface UserProfile {
   district?: string;
   exactAddress?: string;
   postalCode?: string;
+  tipoIdentificacion?: string;
+  numeroIdentificacion?: string;
+  razonSocial?: string;
   favorites?: string[];
   createdAt?: any;
   updatedAt?: any;

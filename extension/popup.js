@@ -1,20 +1,9 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-app.js";
-import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
-import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js";
-
 // TODO: Replace with your actual Firebase config from firebase-applet-config.json
 const firebaseConfig = {
-  projectId: "una-aventura-mas-cr",
-  appId: "1:82072938954:web:b19abdedc9d0a2618f0733",
-  apiKey: "AIzaSyDcYfZAQX5VtN8HQKVh1d7_pgTPye2r49U",
-  authDomain: "una-aventura-mas-cr.firebaseapp.com",
-  storageBucket: "una-aventura-mas-cr.firebasestorage.app",
-  messagingSenderId: "82072938954"
+  projectId: "ticotrae",
+  databaseId: "(default)",
+  apiKey: "AIzaSyA2TjAk3r71xmYuRb1dNkCAFhoVKvUdt0g"
 };
-
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app, "ai-studio-9e5d89e4-4d88-4d03-b748-3a8f414b899d");
-const auth = getAuth(app);
 
 let currentProductData = null;
 
@@ -60,23 +49,77 @@ document.getElementById('send-btn').addEventListener('click', async () => {
   btn.innerText = 'Enviando...';
   
   try {
-    // Iniciar sesión anónima o manejar autenticación adecuada si exiges roles de Auth en rules!
-    // Para simplificar, la regla actual exige isSignedIn pero puedes modificarla.
-    // Asumiremos que el capturador ya inició sesión anonima.
-    const userCredential = await signInAnonymously(auth);
-    const uid = userCredential.user.uid;
-    
-    // Add document to Firestore
-    await addDoc(collection(db, "productos"), {
-        titulo: currentProductData.titulo || '',
-        url_original: currentProductData.url_original || '',
-        imagen_url: currentProductData.imagen_url || '',
-        precio_usd: currentProductData.precio_usd || 0,
-        estado: "pendiente",
-        ownerId: uid,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
+    // 1. SignIn Anonymously via REST API to get ID token
+    const authUrl = `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${firebaseConfig.apiKey}`;
+    const authRes = await fetch(authUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ returnSecureToken: true })
     });
+    
+    if (!authRes.ok) {
+      throw new Error("No se pudo iniciar sesión de forma anónima. Asegúrate de habilitar 'Inicio de sesión Anónimo' en Firebase Auth.");
+    }
+    const authData = await authRes.json();
+    const idToken = authData.idToken;
+    const uid = authData.localId;
+    
+    // Preparar el enlace de afiliado (Añade tu código de afiliado a la URL)
+    let originalUrl = currentProductData.url_original || '';
+    let tiendaOrigen = 'otra';
+    let metodoVenta = 'Intermediario';
+
+    if (originalUrl.includes('amazon.')) {
+      tiendaOrigen = 'amazon';
+      metodoVenta = 'Afiliado';
+      const affiliateTag = 'ticotrae1981-20';
+      if (!originalUrl.includes('tag=')) {
+        originalUrl = originalUrl.includes('?') ? `${originalUrl}&tag=${affiliateTag}` : `${originalUrl}?tag=${affiliateTag}`;
+      }
+    } else if (originalUrl.includes('ebay.')) {
+      tiendaOrigen = 'ebay';
+    }
+
+    // 2. Add document to Firestore via REST API
+    const firestoreUrl = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/${firebaseConfig.databaseId}/documents/productos`;
+    
+    // Construct Firestore Document format
+    const docData = {
+      fields: {
+        titulo: { stringValue: currentProductData.titulo || 'Sin título' },
+        url_original: { stringValue: originalUrl },
+        imagen_url: { stringValue: currentProductData.imagen_url || '' },
+        imagenes: { 
+          arrayValue: {
+            values: (currentProductData.imagenes || []).map(img => ({ stringValue: img }))
+          }
+        },
+        descripcion: { stringValue: currentProductData.descripcion || '' },
+        tallas: { stringValue: currentProductData.tallas || '' },
+        precio_usd: { doubleValue: Number(currentProductData.precio_usd) || 0 },
+        estado: { stringValue: 'pendiente' },
+        tienda_origen: { stringValue: tiendaOrigen },
+        metodo_venta: { stringValue: metodoVenta },
+        ownerId: { stringValue: uid },
+        createdAt: { timestampValue: new Date().toISOString() },
+        updatedAt: { timestampValue: new Date().toISOString() }
+      }
+    };
+    
+    const dbRes = await fetch(firestoreUrl, {
+       method: 'POST',
+       headers: { 
+         'Content-Type': 'application/json',
+         'Authorization': `Bearer ${idToken}`
+       },
+       body: JSON.stringify(docData)
+    });
+    
+    if (!dbRes.ok) {
+      const errorText = await dbRes.text();
+      console.error("Firestore Error:", errorText);
+      throw new Error(`Error Firestore: ${dbRes.status}. Revisa las reglas o logs.`);
+    }
     
     statusDiv.innerHTML = '<span class="success">¡Producto enviado a la PWA con éxito!</span>';
     btn.innerText = 'Enviado';
@@ -88,5 +131,7 @@ document.getElementById('send-btn').addEventListener('click', async () => {
   }
 });
 
-// Run when popup opens
+document.getElementById('scan-btn').addEventListener('click', requestData);
+
+// Automatically request data initially in case they open it on a product page
 requestData();

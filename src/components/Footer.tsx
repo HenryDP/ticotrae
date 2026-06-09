@@ -24,6 +24,8 @@ export default function Footer() {
   const [newsletterEmail, setNewsletterEmail] = useState('');
   const [newsletterStatus, setNewsletterStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   
+  const [policyModal, setPolicyModal] = useState<{title: string, content: string} | null>(null);
+
   const navigate = useNavigate();
 
   const handleSubscribe = async (e: React.FormEvent) => {
@@ -76,6 +78,8 @@ export default function Footer() {
     return () => unsub();
   }, []);
 
+  const [installModal, setInstallModal] = useState(false);
+
   const handleInstallClick = async () => {
     if (deferredPrompt) {
       deferredPrompt.prompt();
@@ -83,6 +87,8 @@ export default function Footer() {
       if (outcome === 'accepted') {
         setDeferredPrompt(null);
       }
+    } else {
+      setInstallModal(true);
     }
   };
 
@@ -127,15 +133,13 @@ export default function Footer() {
           <p className="text-sm text-gray-400 leading-relaxed pr-2">
             {settings.aboutText}
           </p>
-          {deferredPrompt && (
-            <button 
-              onClick={handleInstallClick}
-              className="mt-2 bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2 rounded-xl text-sm font-bold inline-flex items-center gap-2 transition w-max shadow-sm"
-            >
-              <Download size={16} strokeWidth={2.5} />
-              Instalar App
-            </button>
-          )}
+          <button 
+            onClick={handleInstallClick}
+            className="mt-2 bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2 rounded-xl text-sm font-bold inline-flex items-center gap-2 transition w-max shadow-sm"
+          >
+            <Download size={16} strokeWidth={2.5} />
+            Instalar App
+          </button>
         </div>
 
         <div className="flex flex-col gap-4">
@@ -171,9 +175,24 @@ export default function Footer() {
         <div className="flex flex-col gap-4">
            <h3 className="font-bold text-white text-lg">Legales</h3>
            <div className="flex flex-col gap-3 text-sm text-gray-200 font-medium">
-             <a href="#" className="hover:text-white hover:underline transition w-max">Términos y Condiciones</a>
-             <a href="#" className="hover:text-white hover:underline transition w-max">Política de Privacidad</a>
-             <a href="#" className="hover:text-white hover:underline transition w-max">Políticas de Envío</a>
+             <button 
+               onClick={() => setPolicyModal({ title: "Términos y Condiciones", content: settings.termsConditions || "Aún no se ha especificado la política." })} 
+               className="hover:text-white hover:underline transition w-max text-left"
+             >
+               Términos y Condiciones
+             </button>
+             <button 
+               onClick={() => setPolicyModal({ title: "Política de Privacidad", content: settings.privacyPolicy || "Aún no se ha especificado la política." })} 
+               className="hover:text-white hover:underline transition w-max text-left"
+             >
+               Política de Privacidad
+             </button>
+             <button 
+               onClick={() => setPolicyModal({ title: "Políticas de Envío", content: settings.shippingPolicy || "Aún no se ha especificado la política." })} 
+               className="hover:text-white hover:underline transition w-max text-left"
+             >
+               Políticas de Envío
+             </button>
            </div>
         </div>
 
@@ -243,6 +262,83 @@ export default function Footer() {
                 {isLoggingIn ? 'Iniciando sesión...' : 'Ingresar como Super Admin'}
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {policyModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 md:p-8 w-full max-w-2xl max-h-[85vh] shadow-2xl relative flex flex-col">
+            <button 
+              onClick={() => setPolicyModal(null)}
+              className="absolute top-4 right-4 p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 focus:outline-none"
+            >
+              <X size={20} />
+            </button>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6 pr-8">{policyModal.title}</h2>
+            <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
+              <div className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed text-sm">
+                {policyModal.content}
+              </div>
+            </div>
+            <div className="mt-6 pt-4 border-t border-gray-100 dark:border-slate-700 flex justify-end">
+              <button 
+                onClick={() => setPolicyModal(null)}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 px-6 rounded-xl transition-colors shadow-sm"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {installModal && (
+        <div className="fixed inset-0 z-[70] flex flex-col items-center justify-end sm:justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 sm:p-8 w-full max-w-md shadow-2xl relative translate-y-0 animate-in slide-in-from-bottom-10 sm:slide-in-from-bottom-0 sm:fade-in-100">
+            <button 
+              onClick={() => setInstallModal(false)}
+              className="absolute top-4 right-4 p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 focus:outline-none"
+            >
+              <X size={20} />
+            </button>
+            
+            <div className="flex items-center gap-4 mb-5">
+              <div className="w-14 h-14 bg-indigo-100 dark:bg-indigo-900/40 rounded-2xl flex items-center justify-center shrink-0">
+                <Download size={28} className="text-indigo-600 dark:text-indigo-400" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white">Instalar App</h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Agrega TicoTrae a tu pantalla de inicio</p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="bg-gray-50 dark:bg-slate-700/50 p-4 rounded-2xl border border-gray-100 dark:border-slate-600">
+                <h3 className="font-semibold text-gray-900 dark:text-white text-sm mb-2">🍎 En iPhone / iPad (Safari)</h3>
+                <ol className="text-sm text-gray-600 dark:text-gray-300 space-y-2 list-decimal pl-5">
+                  <li className="pl-1">Toca el botón <strong>Compartir</strong> (el cuadrado con <span className="inline-flex py-0.5 px-1.5 bg-white dark:bg-slate-600 border border-gray-200 dark:border-slate-500 rounded text-xs mx-0.5">↑</span>) en la barra inferior.</li>
+                  <li className="pl-1">Desliza hacia abajo y selecciona <strong>"Agregar a inicio"</strong> (con ícono <span className="inline-flex py-0.5 px-1.5 bg-white dark:bg-slate-600 border border-gray-200 dark:border-slate-500 rounded text-xs mx-0.5">+</span>).</li>
+                  <li className="pl-1">Toca en <strong>Agregar</strong> en la esquina superior derecha.</li>
+                </ol>
+              </div>
+
+              <div className="bg-gray-50 dark:bg-slate-700/50 p-4 rounded-2xl border border-gray-100 dark:border-slate-600">
+                <h3 className="font-semibold text-gray-900 dark:text-white text-sm mb-2">🤖 En Android (Chrome)</h3>
+                <ol className="text-sm text-gray-600 dark:text-gray-300 space-y-2 list-decimal pl-5">
+                  <li className="pl-1">Toca el botón de menú <span className="inline-flex py-[1px] px-1 bg-white dark:bg-slate-600 border border-gray-200 dark:border-slate-500 rounded font-bold tracking-widest text-[#555] dark:text-[#ccc] text-[8px] mx-0.5 -translate-y-px leading-none">⋮</span> en la esquina superior derecha.</li>
+                  <li className="pl-1">Selecciona <strong>"Agregar a la pantalla principal"</strong> o "Instalar aplicación".</li>
+                  <li className="pl-1">Confirma seleccionando <strong>Agregar</strong>.</li>
+                </ol>
+              </div>
+            </div>
+
+            <button 
+              onClick={() => setInstallModal(false)}
+              className="mt-6 w-full bg-gray-100 hover:bg-gray-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-gray-800 dark:text-white font-semibold py-3 px-6 rounded-xl transition-colors"
+            >
+              Entendido
+            </button>
           </div>
         </div>
       )}

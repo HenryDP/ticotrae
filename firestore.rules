@@ -2,71 +2,71 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // 1. Global Safety Net
+    
+    // 1. Red de seguridad global (Bloquea todo por defecto)
     match /{document=**} {
       allow read, write: if false;
     }
 
-    // Primitive Definition
-    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    // ==========================================
+    // FUNCIONES REUTILIZABLES
+    // ==========================================
     function incoming() { return request.resource.data; }
     function existing() { return resource.data; }
     function isSignedIn() { return request.auth != null; }
-
-    function isValidProducto(data) {
-      return data.keys().hasAll(['titulo', 'url_original', 'imagen_url', 'precio_usd', 'estado', 'ownerId']) &&
-             data.titulo is string && data.titulo.size() > 0 && data.titulo.size() <= 1000 &&
-             data.url_original is string && data.url_original.size() > 0 && data.url_original.size() <= 2000 &&
-             data.imagen_url is string && data.imagen_url.size() > 0 && data.imagen_url.size() <= 2000 &&
-             data.precio_usd is number && data.precio_usd >= 0 &&
-             data.estado in ['pendiente', 'publicado'] &&
-             data.ownerId == request.auth.uid &&
-             (data.keys().hasAny(['precio_cr']) == false || (data.precio_cr is number && data.precio_cr >= 0)) &&
-             (data.keys().hasAny(['categoria']) == false || (data.categoria is string)) &&
-             (data.keys().hasAny(['imagenes']) == false || (data.imagenes is list));
+    
+    // Centralizamos tu rol de administrador para mayor seguridad
+    function isAdmin() { 
+      return isSignedIn() && ('email' in request.auth.token) && request.auth.token.email == 'duranhenry1981@gmail.com'; 
+    }
+    
+    // Verifica si el usuario actual es el creador original del documento
+    function isOwner(data) { 
+      return isSignedIn() && data.ownerId == request.auth.uid; 
     }
 
+    // ==========================================
+    // REGLAS POR COLECCIÓN
+    // ==========================================
+
+    // --- PRODUCTOS ---
     match /productos/{productoId} {
-      allow read: if true; // Any client can read products for the storefront
+      allow read: if true; // Cualquier cliente puede ver el catálogo
 
-      allow create: if isSignedIn() &&
-                       isValidId(productoId) &&
-                       isValidProducto(incoming()) &&
-                       incoming().keys().size() >= 8 && incoming().keys().size() <= 12 &&
-                       incoming().createdAt == request.time &&
-                       incoming().updatedAt == request.time;
+      // Creación: Autenticado
+      allow create: if isSignedIn();
 
-      allow update: if isSignedIn() &&
-                       isValidId(productoId) &&
-                       isValidProducto(incoming()) &&
-                       incoming().ownerId == existing().ownerId &&
-                       incoming().createdAt == existing().createdAt &&
-                       incoming().updatedAt == request.time &&
-                       (
-                         // Author modifying own product
-                         (existing().ownerId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['titulo', 'url_original', 'imagen_url', 'imagenes', 'precio_usd', 'precio_cr', 'categoria', 'estado', 'updatedAt']))
-                       );
+      // Actualización: Solo el creador o el Admin. Evita secuestro de productos.
+      allow update: if isSignedIn() 
+                    && (isOwner(existing()) || isAdmin())
+                    && (incoming().keys().hasAny(['ownerId']) == false || incoming().ownerId == existing().ownerId);
 
-      allow delete: if isSignedIn() && isValidId(productoId) && existing().ownerId == request.auth.uid;
+      allow delete: if isAdmin() || (isSignedIn() && isOwner(existing()));
     }
 
+    // --- AJUSTES DE LA PWA (Configuración, T.C., Márgenes) ---
     match /settings/{docId} {
-      allow read: if true;
-      allow write: if isSignedIn();
+      allow read: if true; // Público para que la PWA calcule precios
+      allow write: if isAdmin(); // SEGURIDAD CERRADA: Solo el administrador edita
     }
 
+    // --- COMENTARIOS / RESEÑAS ---
     match /comentarios/{comentarioId} {
       allow read: if true;
       allow create: if isSignedIn() && incoming().autorId == request.auth.uid;
+      allow update: if isSignedIn() && existing().autorId == request.auth.uid;
+      allow delete: if isAdmin() || (isSignedIn() && existing().autorId == request.auth.uid);
     }
 
+    // --- PERFILES DE USUARIO ---
     match /users/{userId} {
       allow read, write: if isSignedIn() && request.auth.uid == userId;
     }
 
+    // --- SUSCRIPTORES DEL NEWSLETTER ---
     match /newsletter_subscribers/{docId} {
-      allow create: if true;
-      allow read, delete: if isSignedIn();
+      allow create: if true; // Abierto para que los clientes se registren
+      allow read, delete: if isAdmin(); // SEGURIDAD CERRADA: Solo el administrador gestiona los correos
     }
   }
 }
