@@ -136,7 +136,7 @@ export default function ProductDetail() {
                const history = localStorage.getItem('user_history');
                const parsedHistory = history ? JSON.parse(history) : [];
                
-               const RENDER_URL = import.meta.env.VITE_BACKEND_URL || "";
+               const RENDER_URL = import.meta.env.VITE_BACKEND_URL || "https://ticotrae.onrender.com";
                const response = await fetch(`${RENDER_URL}/api/recommend`, {
                  method: 'POST',
                  headers: { 'Content-Type': 'application/json' },

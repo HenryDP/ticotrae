@@ -218,7 +218,7 @@ export default function Admin() {
                     // =========================================================
                     // URL de Render actualizada con la imagen que enviaste
                     // =========================================================
-                    const RENDER_URL = import.meta.env.VITE_BACKEND_URL || "";
+                    const RENDER_URL = import.meta.env.VITE_BACKEND_URL || "https://ticotrae.onrender.com";
                     try {
                       const res = await fetch(`${RENDER_URL}/api/scrape`, {
                         method: 'POST',
@@ -236,7 +236,7 @@ export default function Admin() {
                       try {
                         data = JSON.parse(textResponse);
                       } catch (parseError) {
-                        throw new Error("Respuesta inválida del servidor. Revisa los logs en el panel de Render.");
+                        throw new Error(`Respuesta inválida del servidor (${res.status}). Esto suele pasar cuando el servidor de Render está iniciando (reiniciándose) y devuelve una página HTML en lugar de los datos. Espera unos 30-50 segundos y vuelve a presionar el botón "Extraer y Guardar".`);
                       }
 
                       if (res.ok) {
@@ -259,6 +259,14 @@ export default function Admin() {
                           marca: data.marca || '',
                           url_original: finalUrl,
                           estado: 'pendiente',
+                          peso_kg: data.peso_kg,
+                          costo_por_kg: data.costo_por_kg,
+                          envio_usa_miami: data.envio_usa_miami,
+                          porcentaje_garantia: data.porcentaje_garantia,
+                          tarifa_envio_cr: data.tarifa_envio_cr,
+                          tarifa_correos_cr: data.tarifa_correos_cr,
+                          ganancia: data.ganancia,
+                          tipo_cambio: data.tipo_cambio,
                           ownerId: auth.currentUser?.uid || ''
                         } as Producto);
                         setImportUrl('');

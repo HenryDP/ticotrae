@@ -1,11 +1,13 @@
 {
+  "manifest_version": 3,
+  "version": "1.0.0",
   "name": "TicoTraeCR - Compras en CR",
   "short_name": "TicoTraeCR",
+  "description": "Captura y publica productos de Amazon en CR",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f8fafc",
   "theme_color": "#ffffff",
-  "description": "Captura y publica productos de Amazon en CR",
   "icons": [
     {
       "src": "/logo.jpg",
