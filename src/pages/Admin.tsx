@@ -5,6 +5,7 @@ import { db, auth } from '../firebase';
 import { Producto, CATEGORIAS, GeneralSettings } from '../types';
 import { FileEdit, CheckCircle2, DollarSign, Loader2, LogOut, Mail, Trash2, Upload, ImagePlus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { scrapeFallback } from '../utils/scraper';
 
 export default function Admin() {
   const [productos, setProductos] = useState<Producto[]>([]);
@@ -222,7 +223,7 @@ export default function Admin() {
                     try {
                       const res = await fetch(`${RENDER_URL}/api/scrape`, {
                         method: 'POST',
-                        mode: 'cors', // Forzamos CORS para evitar bloqueos
+                        mode: 'cors',
                         headers: { 
                           'Content-Type': 'application/json',
                           'Accept': 'application/json'
@@ -239,7 +240,44 @@ export default function Admin() {
                         throw new Error(`Respuesta inválida del servidor (${res.status}). Esto suele pasar cuando el servidor de Render está iniciando (reiniciándose) y devuelve una página HTML en lugar de los datos. Espera unos 30-50 segundos y vuelve a presionar el botón "Extraer y Guardar".`);
                       }
 
-                      if (res.ok) {
+                      if (!res.ok) {
+                        throw new Error(data.error || "Error desconocido");
+                      }
+                      
+                      let finalUrl = data.url_original || '';
+                      if (finalUrl.includes('amazon.')) {
+                        const tag = 'ticotrae1981-20';
+                        if (!finalUrl.includes('tag=')) {
+                          finalUrl = finalUrl.includes('?') ? `${finalUrl}&tag=${tag}` : `${finalUrl}?tag=${tag}`;
+                        }
+                      }
+
+                      setEditingProd({
+                        id: `temp_${Date.now()}`,
+                        titulo: data.titulo,
+                        precio_usd: data.precio_usd,
+                        imagen_url: data.imagen_url,
+                        imagenes: data.imagenes || [],
+                        descripcion: data.descripcion || '',
+                        tallas: data.tallas || '',
+                        marca: data.marca || '',
+                        url_original: finalUrl,
+                        estado: 'pendiente',
+                        peso_kg: data.peso_kg || 1,
+                        costo_por_kg: data.costo_por_kg,
+                        envio_usa_miami: data.envio_usa_miami,
+                        porcentaje_garantia: data.porcentaje_garantia,
+                        tarifa_envio_cr: data.tarifa_envio_cr,
+                        tarifa_correos_cr: data.tarifa_correos_cr,
+                        ganancia: data.ganancia,
+                        tipo_cambio: data.tipo_cambio,
+                        ownerId: auth.currentUser?.uid || ''
+                      } as Producto);
+                      setImportUrl('');
+                    } catch (e: any) {
+                      console.warn("Backend scrape falló, intentando scrape local...", e);
+                      try {
+                        const data = await scrapeFallback(importUrl);
                         let finalUrl = data.url_original || '';
                         if (finalUrl.includes('amazon.')) {
                           const tag = 'ticotrae1981-20';
@@ -247,7 +285,6 @@ export default function Admin() {
                             finalUrl = finalUrl.includes('?') ? `${finalUrl}&tag=${tag}` : `${finalUrl}?tag=${tag}`;
                           }
                         }
-
                         setEditingProd({
                           id: `temp_${Date.now()}`,
                           titulo: data.titulo,
@@ -259,26 +296,16 @@ export default function Admin() {
                           marca: data.marca || '',
                           url_original: finalUrl,
                           estado: 'pendiente',
-                          peso_kg: data.peso_kg,
-                          costo_por_kg: data.costo_por_kg,
-                          envio_usa_miami: data.envio_usa_miami,
-                          porcentaje_garantia: data.porcentaje_garantia,
-                          tarifa_envio_cr: data.tarifa_envio_cr,
-                          tarifa_correos_cr: data.tarifa_correos_cr,
-                          ganancia: data.ganancia,
-                          tipo_cambio: data.tipo_cambio,
+                          peso_kg: data.peso_kg || 1,
                           ownerId: auth.currentUser?.uid || ''
                         } as Producto);
                         setImportUrl('');
-                      } else {
-                        alert("Error: " + (data.error || "No se pudo obtener datos. Comprueba la URL."));
-                      }
-                    } catch (e: any) {
-                      // Manejo específico si el servidor de Render está dormido
-                      if (e.message === "Failed to fetch") {
-                        alert("Error al conectar: 'Failed to fetch'.\n\nComo usamos la versión gratuita de Render, es probable que el servidor estuviera 'dormido'. Intenta darle al botón nuevamente en unos 50 segundos.");
-                      } else {
-                        alert("Error al importar: " + e.message);
+                      } catch (fallbackError: any) {
+                        if (e.message === "Failed to fetch") {
+                          alert("Error al conectar: 'Failed to fetch'.\n\nComo usamos la versión gratuita de Render, es probable que el servidor estuviera 'dormido' y la recolección local también falló.");
+                        } else {
+                          alert("Error al importar: " + e.message + " y " + fallbackError.message);
+                        }
                       }
                     } finally {
                       setImporting(false);
