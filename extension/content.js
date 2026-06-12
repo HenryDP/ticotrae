@@ -4,30 +4,54 @@ function extractAmazonProductData() {
     const titleElement = document.querySelector('#productTitle') || document.querySelector('.qa-title-text');
     const titulo = titleElement ? titleElement.innerText.trim() : '';
 
+    const cleanAmazonUrl = (u) => {
+      if (!u) return "";
+      return u.replace(/\._[A-Za-z0-9_,-]+_\./g, '.');
+    };
+
     const imageElement = document.querySelector('#landingImage') || document.querySelector('#imgBlkFront') || document.querySelector('.a-dynamic-image');
     let imagen_url = imageElement ? imageElement.src : '';
     
     if (imagen_url && imagen_url.includes('data:image')) {
        // if base64 placeholder, try to get actual from attribute
-       imagen_url = imageElement.getAttribute('data-old-hires') || imageElement.getAttribute('data-a-dynamic-image') || imagen_url;
-       if (imagen_url.includes('{')) {
+       let dyn = imageElement.getAttribute('data-old-hires') || imageElement.getAttribute('data-a-dynamic-image');
+       if (dyn && dyn.includes('{')) {
           try {
-             const parsed = JSON.parse(imagen_url);
-             imagen_url = Object.keys(parsed)[0];
+             const parsed = JSON.parse(dyn.replace(/&quot;/g, '"'));
+             imagen_url = Object.keys(parsed)[0] || imagen_url;
           } catch(e) {}
+       } else if (dyn) {
+         imagen_url = dyn;
        }
     }
+    imagen_url = cleanAmazonUrl(imagen_url);
 
     // Buscar otras imágenes
-    const imagenes = [];
-    document.querySelectorAll('.a-button-thumbnail img').forEach(img => {
-       let highRes = img.src.replace(/_US40_/, '_SY879_').replace(/_UX(..)_/, '_UX679_'); // Intentar mejor resolución
-       if(highRes !== imagen_url) imagenes.push(highRes);
-    });
+    let imagenes = [];
+    
+    // Attempt to extract from data-a-dynamic-image if available
+    const dynImgs = document.querySelector('.a-dynamic-image')?.getAttribute('data-a-dynamic-image');
+    if (dynImgs && dynImgs.includes('{')) {
+      try {
+        const parsed = JSON.parse(dynImgs.replace(/&quot;/g, '"'));
+        Object.keys(parsed).forEach(k => {
+          const u = cleanAmazonUrl(k);
+          if (u && u !== imagen_url) imagenes.push(u);
+        });
+      } catch(e) {}
+    }
+
+    if (imagenes.length === 0) {
+      document.querySelectorAll('.a-button-thumbnail img, .imageThumbnail img, .imgTagWrapper img').forEach(img => {
+         const u = cleanAmazonUrl(img.src);
+         if(u && u !== imagen_url) imagenes.push(u);
+      });
+    }
+    imagenes = [...new Set(imagenes)].slice(0, 8); // Max 8 unique images
 
     // Buscar descripción
     let descripcion = '';
-    const descElement = document.querySelector('#feature-bullets');
+    const descElement = document.querySelector('#feature-bullets') || document.querySelector('#productDescription');
     if (descElement) {
         descripcion = descElement.innerText.trim();
     }

@@ -14,13 +14,7 @@
     "https://*.ebay.com/*"
   ],
   "action": {
-    "default_title": "Abrir panel de TicoTrae",
-    "default_icon": "icon.png"
-  },
-  "icons": {
-    "16": "icon.png",
-    "48": "icon.png",
-    "128": "icon.png"
+    "default_title": "Abrir panel de TicoTrae"
   },
   "background": {
     "service_worker": "background.js"

@@ -125,41 +125,24 @@ export default function ProductDetail() {
         // Fetch recomendaciones
         if (prodData.categoria) {
            const getRecs = async () => {
-             // Fallback logic
-             const qRecs = query(
-               collection(db, 'productos'),
-               where('categoria', '==', prodData.categoria),
-               limit(5)
-             );
-             // We'll try the smart recommendation engine
+             // Fallback logic for recommendations
              try {
-               const history = localStorage.getItem('user_history');
-               const parsedHistory = history ? JSON.parse(history) : [];
-               
-               const RENDER_URL = import.meta.env.VITE_BACKEND_URL || "https://ticotrae.onrender.com";
-               const response = await fetch(`${RENDER_URL}/api/recommend`, {
-                 method: 'POST',
-                 headers: { 'Content-Type': 'application/json' },
-                 body: JSON.stringify({ current_product: prodData, user_history: parsedHistory })
-               });
-               if (response.ok) {
-                 const data = await response.json();
-                 if (Array.isArray(data)) {
-                   setAiRecomendaciones(data);
+               const qRecs = query(
+                 collection(db, 'productos'),
+                 where('categoria', '==', prodData.categoria),
+                 limit(5)
+               );
+               const recsSnap = await getDocs(qRecs);
+               const recs: Producto[] = [];
+               recsSnap.forEach(d => {
+                 if (d.id !== prodData.id) {
+                   recs.push({ id: d.id, ...d.data() } as Producto);
                  }
-               }
+               });
+               setRecomendaciones(recs.slice(0, 4));
              } catch (e) {
-                console.error(e);
+               console.error("Error cargando recomendaciones:", e);
              }
-
-             const recsSnap = await getDocs(qRecs);
-             const recs: Producto[] = [];
-             recsSnap.forEach(d => {
-               if (d.id !== prodData.id) {
-                 recs.push({ id: d.id, ...d.data() } as Producto);
-               }
-             });
-             setRecomendaciones(recs.slice(0, 4));
            };
            getRecs();
         }

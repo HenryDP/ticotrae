@@ -5,7 +5,7 @@ import { db, auth } from '../firebase';
 import { Producto, CATEGORIAS, GeneralSettings } from '../types';
 import { FileEdit, CheckCircle2, DollarSign, Loader2, LogOut, Mail, Trash2, Upload, ImagePlus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { scrapeFallback } from '../utils/scraper';
+import { scrapeFallback, parseHTMLProduct } from '../utils/scraper';
 
 export default function Admin() {
   const [productos, setProductos] = useState<Producto[]>([]);
@@ -15,6 +15,9 @@ export default function Admin() {
   const [filterEstado, setFilterEstado] = useState<'pendiente' | 'publicado'>('pendiente');
   const [importUrl, setImportUrl] = useState('');
   const [importing, setImporting] = useState(false);
+  const [importTab, setImportTab] = useState<'url' | 'html'>('url');
+  const [htmlPaste, setHtmlPaste] = useState('');
+  const [htmlUrl, setHtmlUrl] = useState('');
   const [user, setUser] = useState<User | null>(auth.currentUser);
   const navigate = useNavigate();
 
@@ -198,84 +201,41 @@ export default function Admin() {
           {/* Lista de pendientes */}
           <div className="w-full md:w-1/3 flex flex-col gap-6">
             
-            {/* Importador por URL */}
+            {/* Importador Inteligente */}
             <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-sm">
-              <h3 className="font-semibold text-gray-900 dark:text-white mb-3 text-sm flex items-center gap-2">
-                 Importar por URL
-              </h3>
-              <div className="flex flex-col gap-3">
-                <input 
-                  type="text"
-                  value={importUrl}
-                  onChange={e => setImportUrl(e.target.value)}
-                  placeholder="https://amazon... o https://ebay..."
-                  className="w-full text-sm border border-gray-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
-                />
-                <button 
-                  onClick={async () => {
-                    if (!importUrl) return;
-                    setImporting(true);
-                    
-                    // =========================================================
-                    // URL de Render actualizada con la imagen que enviaste
-                    // =========================================================
-                    const RENDER_URL = import.meta.env.VITE_BACKEND_URL || "https://ticotrae.onrender.com";
-                    try {
-                      const res = await fetch(`${RENDER_URL}/api/scrape`, {
-                        method: 'POST',
-                        mode: 'cors',
-                        headers: { 
-                          'Content-Type': 'application/json',
-                          'Accept': 'application/json'
-                        },
-                        body: JSON.stringify({ url: importUrl })
-                      });
-                      
-                      const textResponse = await res.text();
-                      let data;
-                      
-                      try {
-                        data = JSON.parse(textResponse);
-                      } catch (parseError) {
-                        throw new Error(`Respuesta inválida del servidor (${res.status}). Esto suele pasar cuando el servidor de Render está iniciando (reiniciándose) y devuelve una página HTML en lugar de los datos. Espera unos 30-50 segundos y vuelve a presionar el botón "Extraer y Guardar".`);
-                      }
+              <div className="flex border-b border-gray-100 dark:border-slate-700 pb-2 mb-4 gap-4">
+                <button
+                  onClick={() => setImportTab('url')}
+                  className={`text-xs font-bold uppercase tracking-wider pb-1 transition-all ${importTab === 'url' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
+                >
+                  Por Enlace URL
+                </button>
+                <button
+                  onClick={() => setImportTab('html')}
+                  className={`text-xs font-bold uppercase tracking-wider pb-1 transition-all flex items-center gap-1 ${importTab === 'html' ? 'text-orange-600 border-b-2 border-orange-600' : 'text-gray-400 hover:text-gray-600'}`}
+                >
+                  <span className="inline-block w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                  Pegar HTML (Irrompible)
+                </button>
+              </div>
 
-                      if (!res.ok) {
-                        throw new Error(data.error || "Error desconocido");
-                      }
+              {importTab === 'url' ? (
+                <div className="flex flex-col gap-3">
+                  <div className="text-xs text-gray-500 dark:text-gray-400 leading-tight">
+                    Introduce el enlace de Amazon o eBay para intentar extraer los datos automáticamente.
+                  </div>
+                  <input 
+                    type="text"
+                    value={importUrl}
+                    onChange={e => setImportUrl(e.target.value)}
+                    placeholder="https://amazon... o https://ebay..."
+                    className="w-full text-sm border border-gray-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
+                  />
+                  <button 
+                    onClick={async () => {
+                      if (!importUrl) return;
+                      setImporting(true);
                       
-                      let finalUrl = data.url_original || '';
-                      if (finalUrl.includes('amazon.')) {
-                        const tag = 'ticotrae1981-20';
-                        if (!finalUrl.includes('tag=')) {
-                          finalUrl = finalUrl.includes('?') ? `${finalUrl}&tag=${tag}` : `${finalUrl}?tag=${tag}`;
-                        }
-                      }
-
-                      setEditingProd({
-                        id: `temp_${Date.now()}`,
-                        titulo: data.titulo,
-                        precio_usd: data.precio_usd,
-                        imagen_url: data.imagen_url,
-                        imagenes: data.imagenes || [],
-                        descripcion: data.descripcion || '',
-                        tallas: data.tallas || '',
-                        marca: data.marca || '',
-                        url_original: finalUrl,
-                        estado: 'pendiente',
-                        peso_kg: data.peso_kg || 1,
-                        costo_por_kg: data.costo_por_kg,
-                        envio_usa_miami: data.envio_usa_miami,
-                        porcentaje_garantia: data.porcentaje_garantia,
-                        tarifa_envio_cr: data.tarifa_envio_cr,
-                        tarifa_correos_cr: data.tarifa_correos_cr,
-                        ganancia: data.ganancia,
-                        tipo_cambio: data.tipo_cambio,
-                        ownerId: auth.currentUser?.uid || ''
-                      } as Producto);
-                      setImportUrl('');
-                    } catch (e: any) {
-                      console.warn("Backend scrape falló, intentando scrape local...", e);
                       try {
                         const data = await scrapeFallback(importUrl);
                         let finalUrl = data.url_original || '';
@@ -301,23 +261,96 @@ export default function Admin() {
                         } as Producto);
                         setImportUrl('');
                       } catch (fallbackError: any) {
-                        if (e.message === "Failed to fetch") {
-                          alert("Error al conectar: 'Failed to fetch'.\n\nComo usamos la versión gratuita de Render, es probable que el servidor estuviera 'dormido' y la recolección local también falló.");
-                        } else {
-                          alert("Error al importar: " + e.message + " y " + fallbackError.message);
-                        }
+                        alert("Error al importar de forma automática.\n\nAmazon/eBay emplea bloqueo Anti-Bots que a veces obstruye los servidores públicos.\n\n¡SOLUCIÓN IRROMPIBLE SIN EXTENSIÓN!\nUsa la pestaña 'Pegar HTML (Irrompible)' arriba, pega el código fuente de la página y se cargará al instante al 100%.");
+                      } finally {
+                        setImporting(false);
                       }
-                    } finally {
-                      setImporting(false);
-                    }
-                  }}
-                  disabled={importing || !importUrl}
-                  className="w-full bg-gray-900 hover:bg-black text-white font-medium py-2.5 px-4 rounded-xl text-sm transition-colors disabled:bg-gray-400 flex items-center justify-center gap-2"
-                >
-                  {importing ? <Loader2 className="animate-spin" size={16} /> : null}
-                  Cargar Producto
-                </button>
-              </div>
+                    }}
+                    disabled={importing || !importUrl}
+                    className="w-full bg-gray-900 hover:bg-black text-white font-medium py-2.5 px-4 rounded-xl text-sm transition-colors disabled:bg-gray-400 flex items-center justify-center gap-2"
+                  >
+                    {importing ? <Loader2 className="animate-spin" size={16} /> : null}
+                    Cargar Producto
+                  </button>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  <div className="text-xs text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/30 p-2.5 rounded-lg leading-relaxed">
+                    <strong>¿Cómo usar este método 100% infalible?</strong><br/>
+                    1. Abre el producto en Amazon/eBay en otra pestaña.<br/>
+                    2. Presiona <strong>Ctrl + U</strong> o clíc derecho ➔ "Ver código fuente".<br/>
+                    3. Selecciona todo (<strong>Ctrl + A</strong>), copialo (<strong>Ctrl + C</strong>) y pégalo abajo.
+                  </div>
+
+                  <input 
+                    type="text"
+                    value={htmlUrl}
+                    onChange={e => setHtmlUrl(e.target.value)}
+                    placeholder="Enlace del producto (Obligatorio para el botón de compra)"
+                    className="w-full text-xs border border-gray-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-xl px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
+                  />
+
+                  <textarea
+                    rows={4}
+                    value={htmlPaste}
+                    onChange={e => setHtmlPaste(e.target.value)}
+                    placeholder="Pega el código HTML completo aquí (Ctrl + V)..."
+                    className="w-full text-xs border border-gray-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-xl px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none resize-y"
+                  />
+
+                  <button 
+                    onClick={() => {
+                      if (!htmlPaste.trim()) {
+                        alert("Por favor pega el código HTML");
+                        return;
+                      }
+                      if (!htmlUrl.trim()) {
+                        alert("Por favor ingresa el enlace del producto para que los clientes puedan comprarlo.");
+                        return;
+                      }
+
+                      setImporting(true);
+                      try {
+                        const data = parseHTMLProduct(htmlPaste, htmlUrl);
+                        let finalUrl = htmlUrl.trim();
+                        if (finalUrl.includes('amazon.')) {
+                          const tag = 'ticotrae1981-20';
+                          if (!finalUrl.includes('tag=')) {
+                            finalUrl = finalUrl.includes('?') ? `${finalUrl}&tag=${tag}` : `${finalUrl}?tag=${tag}`;
+                          }
+                        }
+
+                        setEditingProd({
+                          id: `temp_${Date.now()}`,
+                          titulo: data.titulo,
+                          precio_usd: data.precio_usd,
+                          imagen_url: data.imagen_url,
+                          imagenes: data.imagenes || [],
+                          descripcion: data.descripcion || '',
+                          tallas: data.tallas || '',
+                          marca: data.marca || '',
+                          url_original: finalUrl,
+                          estado: 'pendiente',
+                          peso_kg: data.peso_kg || 1,
+                          ownerId: auth.currentUser?.uid || ''
+                        } as Producto);
+                        
+                        setHtmlPaste('');
+                        setHtmlUrl('');
+                        alert("¡Extracción de datos completada con éxito! Ya puedes revisar y publicar el artículo en el editor de la derecha.");
+                      } catch (err: any) {
+                        alert("Error al extraer datos del HTML. Asegúrate de copiar el código fuente completo.");
+                      } finally {
+                        setImporting(false);
+                      }
+                    }}
+                    disabled={importing || !htmlPaste.trim() || !htmlUrl.trim()}
+                    className="w-full bg-orange-600 hover:bg-orange-700 text-white font-medium py-2.5 px-4 rounded-xl text-sm transition-colors disabled:bg-gray-400 flex items-center justify-center gap-2"
+                  >
+                    Extraer y Cargar desde HTML
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className="flex flex-col gap-4">
@@ -728,7 +761,7 @@ function SubscribersPanel() {
   );
 }
 
-function EditorForm({ prod, onDone }: { prod: Producto, onDone: () => void }) {
+function EditorForm({ prod, onDone }: { prod: Producto, onDone: () => void, key?: any }) {
   const [precioUsd, setPrecioUsd] = useState(prod.precio_usd || 0);
   const [envioUsaMiami, setEnvioUsaMiami] = useState(prod.envio_usa_miami || 0);
   const [porcentajeGarantia, setPorcentajeGarantia] = useState(prod.porcentaje_garantia || 10);
