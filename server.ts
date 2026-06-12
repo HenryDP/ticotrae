@@ -102,103 +102,55 @@ ${JSON.stringify({ current_product, user_history }, null, 2)}
 
       const html = await response.text();
 
-      let title = "Producto sin título";
-      let price = 0;
-      let imgUrl = "";
-      let imagenes: string[] = [];
+      const aiClient = getAi();
+      const promptText = `
+Eres un bot experto en data scraping. Analiza el siguiente HTML de ${isAmazon ? 'Amazon' : 'eBay'} y extrae la información del producto.
+Responde ÚNICAMENTE con un objeto JSON válido, sin bloques de código Markdown ni texto adicional.
 
-      if (isAmazon) {
-        // Extract title
-        let titleMatch = html.match(/<span id="productTitle"[^>]*>([^<]+)<\/span>/i);
-        if (titleMatch) title = titleMatch[1].trim();
+ESTRUCTURA DEL JSON:
+{
+  "titulo": "Título completo del producto",
+  "precio_usd": 0.00,
+  "descripcion": "Descripción detallada del producto o las características principales",
+  "tallas": "Tallas o tamaños disponibles (si aplica)",
+  "marca": "Marca del producto",
+  "peso_kg": 1.0,
+  "imagen_url": "URL de la imagen principal en alta resolución",
+  "imagenes": ["url_alta_res_1", "url_alta_res_2"]
+}
 
-        // Extract price
-        let wholeMatch = html.match(/<span class="a-price-whole">([^<]+)<\/span>/i);
-        let fracMatch  = html.match(/<span class="a-price-fraction">([^<]+)<\/span>/i);
-        
-        if (wholeMatch && fracMatch) {
-          let w = wholeMatch[1].replace(/[^0-9]/g, '');
-          let f = fracMatch[1].replace(/[^0-9]/g, '');
-          price = parseFloat(`${w}.${f}`);
-        } else {
-          let priceMatch = html.match(/<span id="priceblock_ourprice"[^>]*>([^<]+)<\/span>/i) || html.match(/<span class="a-offscreen">\$([^<]+)<\/span>/i);
-          if (priceMatch) {
-              price = parseFloat(priceMatch[1].replace(/[^0-9.]/g, ''));
-          }
-        }
+(Notas: 
+- precio_usd debe ser un número flotante, extrae el precio actual. 
+- Para imagenes, extrae las URLs en la mejor resolución posible y descarta avatares o thumbnails. En Amazon las URL de imágenes grandes no suelen tener algo como ._AC_US40_.jpg sino que terminan directo en .jpg.
+- Si no encuentras algún dato, usa un valor lógico por defecto (ej. peso_kg: 1.0) o string vacío.
+- HTML LIMITADO a primeros caracteres. Busca bien dentro.
+)
 
-        // Clean Amazon image URL to get high-resolution version
-        const cleanAmazonUrl = (u: string) => {
-          if (!u) return "";
-          return u.replace(/\._[A-Za-z0-9_,-]+_\./g, '.');
-        };
+HTML:
+${html.substring(0, 150000)}
+`;
 
-        // Extract image
-        let imgMatch = html.match(/<img[^>]*id="landingImage"[^>]*src="([^"]+)"/i) || html.match(/<img[^>]*id="imgBlkFront"[^>]*src="([^"]+)"/i) || html.match(/data-old-hires="([^"]+)"/i);
-        if (imgMatch) imgUrl = cleanAmazonUrl(imgMatch[1]);
+      const aiResponse = await aiClient.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: promptText,
+      });
 
-        const colorImagesMatch = html.match(/'colorImages':\s*\{\s*'initial':\s*(\[.+?\])\s*\},/);
-        if (colorImagesMatch) {
-          try {
-            const parsed = JSON.parse(colorImagesMatch[1]);
-            imagenes = parsed.map((img: any) => cleanAmazonUrl(img.hiRes || img.large)).filter((u: string) => u.trim() !== "");
-          } catch(e) {}
-        }
-        
-        if (imagenes.length === 0) {
-          const imgBlkMatch = html.match(/data-a-dynamic-image="([^"]+)"/);
-          if (imgBlkMatch) {
-            try {
-              const parsedStr = imgBlkMatch[1].replace(/&quot;/g, '"');
-              const parsed = JSON.parse(parsedStr);
-              imagenes = Object.keys(parsed).map(cleanAmazonUrl);
-            } catch(e) {}
-          }
-        }
-      } else if (isEbay) {
-        // eBay scraping logic
-        let titleMatch = html.match(/<h1 class="x-item-title__mainTitle">[^<]*<span class="ux-textspans ux-textspans--BOLD">([^<]+)<\/span><\/h1>/i) || html.match(/<h1[^>]*>([^<]+)<\/h1>/i);
-        if (titleMatch) title = titleMatch[1].trim();
-
-        let priceMatch = html.match(/<div class="x-price-primary" data-testid="x-price-primary">[^<]*<span class="ux-textspans">US \$([^<]+)<\/span><\/div>/i) || html.match(/<span itemprop="price"[^>]*>US \$([^<]+)<\/span>/i) || html.match(/<span class="ux-textspans">US \$([^<]+)<\/span>/i);
-        if (priceMatch) {
-          price = parseFloat(priceMatch[1].replace(/[^0-9.]/g, ''));
-        }
-
-        let imgMatch = html.match(/<img[^>]*data-zoom-src="([^"]+)"/i) || html.match(/<img[^>]*id="icImg"[^>]*src="([^"]+)"/i) || html.match(/<div class="ux-image-carousel-item image-treatment active image"\s*data-zoom-src="([^"]+)"/i) || html.match(/<img[^>]*src="([^"]+s-l1600\.[^"]+)"/i);
-        if (imgMatch) imgUrl = imgMatch[1];
-        
-        // Find gallery images
-        const galleryMatches = html.matchAll(/"image":"([^"]+)"/g);
-        for (const match of galleryMatches) {
-          if (match[1].includes('s-l') || match[1].includes('s-l1600') || match[1].includes('s-l500')) {
-             let bigImg = match[1].replace(/\\u002F/g, '/');
-             bigImg = bigImg.replace(/s-l[0-9]+/g, 's-l1600');
-             if (!imagenes.includes(bigImg)) {
-               imagenes.push(bigImg);
-             }
-          }
-        }
-
-        // Sometimes images are in picture elements or data attributes
-        const picMatches = html.matchAll(/img src="([^"]+s-l[0-9]+\.jpg)"/g);
-        for (const match of picMatches) {
-           let bigImg = match[1].replace(/s-l[0-9]+/g, 's-l1600');
-           if (!imagenes.includes(bigImg)) {
-             imagenes.push(bigImg);
-           }
-        }
+      let responseText = aiResponse.text || "";
+      if (responseText.startsWith("```json")) {
+        responseText = responseText.replace(/```json/g, "").replace(/```/g, "").trim();
+      } else if (responseText.startsWith("```")) {
+        responseText = responseText.replace(/```/g, "").trim();
       }
 
-      if (imagenes.length === 0 && imgUrl) {
-        imagenes = [imgUrl];
+      let parsedData;
+      try {
+        parsedData = JSON.parse(responseText);
+      } catch (e) {
+        throw new Error("No se pudo extraer la información correctamente de la página.");
       }
 
       res.json({
-        titulo: title,
-        precio_usd: price || 0,
-        imagen_url: imgUrl || imagenes[0] || "",
-        imagenes: imagenes,
+        ...parsedData,
         url_original: url
       });
       

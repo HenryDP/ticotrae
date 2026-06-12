@@ -1,29 +1,44 @@
 {
   "manifest_version": 3,
-  "version": "1.0.0",
-  "name": "TicoTraeCR - Compras en CR",
-  "short_name": "TicoTraeCR",
-  "description": "Captura y publica productos de Amazon en CR",
-  "start_url": "/",
-  "display": "standalone",
-  "background_color": "#f8fafc",
-  "theme_color": "#ffffff",
-  "icons": [
+  "name": "TicoTrae Importador",
+  "version": "1.1",
+  "description": "Captura productos de Amazon y eBay dejándolo fijo en tu navegador como un panel lateral.",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "sidePanel"
+  ],
+  "host_permissions": [
+    "https://*.amazon.com/*",
+    "https://*.amazon.es/*",
+    "https://*.ebay.com/*"
+  ],
+  "action": {
+    "default_title": "Abrir panel de TicoTrae",
+    "default_icon": "icon.png"
+  },
+  "icons": {
+    "16": "icon.png",
+    "48": "icon.png",
+    "128": "icon.png"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "side_panel": {
+    "default_path": "popup.html"
+  },
+  "content_scripts": [
     {
-      "src": "/logo.jpg",
-      "sizes": "any",
-      "type": "image/jpeg",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "/logo.jpg",
-      "sizes": "192x192",
-      "type": "image/jpeg"
-    },
-    {
-      "src": "/logo.jpg",
-      "sizes": "512x512",
-      "type": "image/jpeg"
+      "matches": [
+        "https://*.amazon.com/*",
+        "https://*.amazon.es/*",
+        "https://*.ebay.com/*"
+      ],
+      "js": ["content.js"]
     }
-  ]
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';"
+  }
 }
