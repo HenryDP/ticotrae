@@ -64,11 +64,11 @@ export default function DepartmentMenu({ onSelectCategory, selectedCategory }: D
           }`}
         >
           <Menu size={20} />
-          <span className="hidden sm:inline">
-            {selectedCategory !== "Todas" ? selectedCategory.split(' - ').slice(-1)[0] : "Departamentos"}
+          <span className="hidden sm:inline truncate max-w-[120px]">
+            {selectedCategory !== "Todas" ? selectedCategory.split(' - ')[0] : "Departamentos"}
           </span>
-          <span className="inline sm:hidden">
-            {selectedCategory !== "Todas" ? "Filtrado" : "Depto"}
+          <span className="inline sm:hidden truncate max-w-[90px]">
+            {selectedCategory !== "Todas" ? selectedCategory.split(' - ')[0] : "Depto"}
           </span>
           <ChevronDown size={18} className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
         </button>
