@@ -5,7 +5,7 @@ import ProductDetail from './pages/ProductDetail';
 import Profile from './pages/Profile';
 import Wishlist from './pages/Wishlist';
 import Cart from './pages/Cart';
-import { PackageSearch, User, Heart, Moon, Sun, ShoppingCart } from 'lucide-react';
+import { PackageSearch, User, Heart, Moon, Sun, ShoppingCart, Share2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { auth, db } from './firebase';
 import { signInAnonymously } from 'firebase/auth';
@@ -13,7 +13,7 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { GeneralSettings } from './types';
 import Logo from './components/Logo';
 import Footer from './components/Footer';
-import { Toaster } from 'react-hot-toast';
+import { Toaster, toast } from 'react-hot-toast';
 import { CartProvider, useCart } from './context/CartContext';
 
 function Header() {
@@ -21,6 +21,25 @@ function Header() {
   const [user, setUser] = useState(auth.currentUser);
   const { totalItems } = useCart();
   const navigate = useNavigate();
+
+  // Share functionality
+  const handleShare = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: settings?.appName || 'TicoTraeCR',
+          text: 'Entra a nuestra PWA para traer tus compras de Amazon a Costa Rica de forma rápida y segura.',
+          url: window.location.href, // Compartimos la URL actual
+        });
+      } catch (error) {
+        // Usuario canceló la acción u ocurrió un error. Lo ignoramos.
+      }
+    } else {
+      // Fallback para navegadores de escritorio que no lo soportan (copia el link al portapapeles)
+      navigator.clipboard.writeText(window.location.href);
+      toast.success('¡Enlace copiado al portapapeles!');
+    }
+  };
 
   // Dark mode state
   const [isDark, setIsDark] = useState(() => {
@@ -113,6 +132,14 @@ function Header() {
             <User size={16} />
             <span className="hidden sm:inline">{user && !user.isAnonymous ? "Mi Perfil" : "Iniciar Sesión"}</span>
           </Link>
+          <button 
+            onClick={handleShare}
+            className="text-white hover:bg-white/10 transition-colors flex items-center gap-1.5 p-1.5 sm:px-3 sm:py-1.5 rounded-lg border border-transparent hover:border-white/20 ml-1" 
+            title="Compartir"
+          >
+            <Share2 size={16} />
+            <span className="hidden lg:inline">Compartir</span>
+          </button>
           <button 
             onClick={() => setIsDark(!isDark)}
             className="text-white hover:bg-white/10 transition-colors flex items-center p-1.5 sm:p-2 rounded-lg border border-transparent hover:border-white/20 ml-1" 
