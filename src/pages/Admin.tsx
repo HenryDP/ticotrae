@@ -21,7 +21,7 @@ export default function Admin() {
   const [user, setUser] = useState<User | null>(auth.currentUser);
   const navigate = useNavigate();
 
-  const isAdmin = user?.email === 'duranhenry1981@gmail.com';
+  const isAdmin = user?.email?.toLowerCase() === 'duranhenry1981@gmail.com';
 
   const handleDeleteProd = async (id: string) => {
     if (confirm("¿Estás seguro de que deseas eliminar este producto?")) {
@@ -57,7 +57,7 @@ export default function Admin() {
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
-      if (!currentUser || currentUser.email !== 'duranhenry1981@gmail.com') {
+      if (!currentUser || currentUser.email?.toLowerCase() !== 'duranhenry1981@gmail.com') {
         setLoading(false);
       }
     });

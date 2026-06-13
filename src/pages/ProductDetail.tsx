@@ -51,7 +51,7 @@ export default function ProductDetail() {
   const [direccionPersonal, setDireccionPersonal] = useState('');
   const [globalWhatsappUrl, setGlobalWhatsappUrl] = useState("https://wa.me/50664435508");
 
-  const isAdmin = auth.currentUser?.email === 'duranhenry1981@gmail.com';
+  const isAdmin = auth.currentUser?.email?.toLowerCase() === 'duranhenry1981@gmail.com';
 
   // Calculator State
   const [pesoKg, setPesoKg] = useState<number>(1);

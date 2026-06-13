@@ -93,7 +93,7 @@ export default function Footer() {
   };
 
   const handleAdminMode = () => {
-    if (auth.currentUser && auth.currentUser.email === 'duranhenry1981@gmail.com') {
+    if (auth.currentUser && auth.currentUser.email?.toLowerCase() === 'duranhenry1981@gmail.com') {
       navigate('/admin');
       return;
     }
@@ -109,7 +109,7 @@ export default function Footer() {
     setIsLoggingIn(true);
     try {
       const userCredential = await signInWithEmailAndPassword(auth, loginEmail, loginPassword);
-      if (userCredential.user.email === 'duranhenry1981@gmail.com') {
+      if (userCredential.user.email?.toLowerCase() === 'duranhenry1981@gmail.com') {
         setShowLogin(false);
         navigate('/admin');
       } else {
