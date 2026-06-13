@@ -140,6 +140,15 @@ function MainApp() {
           <Route path="/profile" element={<Profile />} />
           <Route path="/wishlist" element={<Wishlist />} />
           <Route path="/cart" element={<Cart />} />
+          <Route path="*" element={
+            <div className="flex flex-col items-center justify-center py-20 text-center">
+              <h2 className="text-4xl font-bold text-gray-800 dark:text-gray-200 mb-4">404</h2>
+              <p className="text-lg text-gray-600 dark:text-gray-400 mb-8">La página que buscas no existe o ha sido movida.</p>
+              <Link to="/" className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-medium transition-colors">
+                Volver al Catálogo
+              </Link>
+            </div>
+          } />
         </Routes>
       </main>
       
