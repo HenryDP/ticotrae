@@ -130,7 +130,7 @@ export default function Catalog() {
     return productos.filter(p => {
       const matchText = searchQuery.toLowerCase();
       const matchesSearch = p.titulo.toLowerCase().includes(matchText) || (p.marca && p.marca.toLowerCase().includes(matchText));
-      const matchesCategory = selectedCategory === "Todas" || p.categoria === selectedCategory;
+      const matchesCategory = selectedCategory === "Todas" || (p.categoria && p.categoria.startsWith(selectedCategory));
       const matchesBrand = selectedBrand === "Todas" || p.marca === selectedBrand;
       
       const pStore = p.tienda_origen || (p.url_original?.toLowerCase().includes('amazon') ? 'amazon' : p.url_original?.toLowerCase().includes('ebay') ? 'ebay' : 'otra');

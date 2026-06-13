@@ -102,6 +102,20 @@ export default function DepartmentMenu({ onSelectCategory, selectedCategory }: D
                 {/* Submenú desplegable al hacer hover (Desktop) */}
                 {activeDepartment === dep && (
                   <div className="absolute bottom-0 left-full ml-1 w-56 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-gray-100 dark:border-slate-700 overflow-hidden hidden sm:flex flex-col">
+                    <button
+                      onClick={() => {
+                        onSelectCategory(dep);
+                        setIsOpen(false);
+                        setActiveDepartment(null);
+                      }}
+                      className={`w-full text-left px-4 py-3 text-sm font-bold transition-colors ${
+                        selectedCategory === dep
+                          ? 'bg-blue-600 text-white'
+                          : 'text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-slate-700/50'
+                      }`}
+                    >
+                      Ver todo en {dep}
+                    </button>
                     {subcats.map(sub => {
                       const fullName = `${dep} - ${sub}`;
                       return (
@@ -128,6 +142,20 @@ export default function DepartmentMenu({ onSelectCategory, selectedCategory }: D
                 {/* Submenú para móvil (Expansión inline) */}
                 {activeDepartment === dep && (
                   <div className="sm:hidden flex flex-col bg-gray-50/50 dark:bg-slate-900 border-y border-gray-100 dark:border-slate-700 h-48 overflow-y-auto">
+                    <button
+                      onClick={() => {
+                        onSelectCategory(dep);
+                        setIsOpen(false);
+                        setActiveDepartment(null);
+                      }}
+                      className={`w-full text-left pl-8 pr-4 py-2.5 text-sm font-bold transition-colors ${
+                        selectedCategory === dep
+                          ? 'bg-blue-100/50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border-l-2 border-blue-500'
+                          : 'text-blue-600 dark:text-blue-400'
+                      }`}
+                    >
+                      Ver todo en {dep}
+                    </button>
                     {subcats.map(sub => {
                       const fullName = `${dep} - ${sub}`;
                       return (
