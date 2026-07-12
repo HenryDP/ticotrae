@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { collection, query, where, onSnapshot, doc, updateDoc, serverTimestamp, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { signOut, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, User } from 'firebase/auth';
 import { db, auth } from '../firebase';
-import { Producto, CATEGORIAS, GeneralSettings } from '../types';
+import { Producto, CATEGORIAS, GeneralSettings, UserProfile } from '../types';
 import { FileEdit, CheckCircle2, DollarSign, Loader2, LogOut, Mail, Trash2, Upload, ImagePlus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { scrapeFallback, parseHTMLProduct } from '../utils/scraper';
@@ -11,7 +11,7 @@ export default function Admin() {
   const [productos, setProductos] = useState<Producto[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingProd, setEditingProd] = useState<Producto | null>(null);
-  const [activeTab, setActiveTab] = useState<'productos' | 'ajustes' | 'suscriptores'>('productos');
+  const [activeTab, setActiveTab] = useState<'productos' | 'ajustes' | 'suscriptores' | 'clientes'>('productos');
   const [filterEstado, setFilterEstado] = useState<'pendiente' | 'publicado'>('pendiente');
   const [importUrl, setImportUrl] = useState('');
   const [importing, setImporting] = useState(false);
@@ -176,6 +176,14 @@ export default function Admin() {
                className={`pb-3 font-medium text-sm transition-colors border-b-2 ${activeTab === 'suscriptores' ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}
              >
                Suscriptores (Newsletter)
+             </button>
+           )}
+           {auth.currentUser?.email === 'duranhenry1981@gmail.com' && (
+             <button 
+               onClick={() => setActiveTab('clientes')}
+               className={`pb-3 font-medium text-sm transition-colors border-b-2 ${activeTab === 'clientes' ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}
+             >
+               Clientes Registrados
              </button>
            )}
         </div>
@@ -416,8 +424,10 @@ export default function Admin() {
         </div>
       ) : activeTab === 'ajustes' ? (
         <SettingsPanel />
-      ) : (
+      ) : activeTab === 'suscriptores' ? (
         <SubscribersPanel />
+      ) : (
+        <ClientsPanel />
       )}
     </div>
   );
@@ -1301,6 +1311,116 @@ function EditorForm({ prod, onDone }: { prod: Producto, onDone: () => void, key?
           {prod.estado === 'pendiente' || prod.id.startsWith('temp_') ? 'Publicar en Tienda (Irreversible)' : 'Forzar Publicación Global'}
         </button>
       </div>
+    </div>
+  );
+}
+
+function ClientsPanel() {
+  const [clients, setClients] = useState<UserProfile[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'users'), (snapshot) => {
+      const usersList: UserProfile[] = [];
+      snapshot.forEach(docSnap => {
+        usersList.push({ id: docSnap.id, ...docSnap.data() } as UserProfile);
+      });
+      usersList.sort((a, b) => (a.displayName || '').localeCompare(b.displayName || ''));
+      setClients(usersList);
+      setLoading(false);
+    });
+    return () => unsub();
+  }, []);
+
+  const exportCSV = () => {
+    const headers = ['Nombre', 'Correo', 'Teléfono', 'Provincia', 'Cantón', 'Distrito', 'Dirección Exacta', 'Identificación'];
+    const rows = clients.map(c => [
+      c.displayName || '',
+      c.email || '',
+      c.phoneNumber || '',
+      c.province || '',
+      c.canton || '',
+      c.district || '',
+      c.exactAddress || '',
+      c.numeroIdentificacion || ''
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(r => r.map(field => `"${(field || '').replace(/"/g, '""')}"`).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `reporte_clientes_ticotrae_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  if (loading) return <div className="py-10 text-center text-gray-500 dark:text-gray-400"><Loader2 className="animate-spin mx-auto" /></div>;
+
+  return (
+    <div className="bg-white dark:bg-slate-800 rounded-3xl border border-gray-200 dark:border-slate-700 shadow-sm overflow-hidden w-full mx-auto p-6 sm:p-8">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8 pb-4 border-b border-gray-100 dark:border-slate-700">
+        <div>
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white">Reporte de Clientes</h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            Total: {clients.length} {clients.length === 1 ? 'cliente' : 'clientes'}
+          </p>
+        </div>
+        <div className="flex gap-3 mt-4 sm:mt-0">
+          <button 
+            onClick={exportCSV}
+            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-xl text-sm font-semibold transition flex items-center gap-2 shadow-sm shadow-green-600/20"
+          >
+            Exportar CSV
+          </button>
+        </div>
+      </div>
+      
+      {clients.length === 0 ? (
+        <div className="text-center py-10 text-gray-500 dark:text-gray-400 border border-dashed border-gray-200 dark:border-slate-700 rounded-xl">
+          Aún no hay clientes registrados.
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-xl border border-gray-100 dark:border-slate-700 max-h-[60vh]">
+          <table className="w-full text-left border-collapse">
+            <thead className="sticky top-0 bg-gray-50 dark:bg-slate-700/90 backdrop-blur-sm z-10 shadow-sm">
+              <tr>
+                <th className="px-5 py-3 text-sm font-semibold text-gray-700 dark:text-gray-300">Nombre</th>
+                <th className="px-5 py-3 text-sm font-semibold text-gray-700 dark:text-gray-300">Contacto</th>
+                <th className="px-5 py-3 text-sm font-semibold text-gray-700 dark:text-gray-300">Ubicación</th>
+                <th className="px-5 py-3 text-sm font-semibold text-gray-700 dark:text-gray-300">Dirección Exacta</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 dark:divide-slate-700/50">
+              {clients.map(client => (
+                <tr key={client.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors">
+                  <td className="px-5 py-3 text-sm text-gray-900 dark:text-white">
+                    <div className="font-medium">{client.displayName || 'Sin nombre'}</div>
+                    <div className="text-xs text-gray-500 mt-1">{client.tipoIdentificacion}: {client.numeroIdentificacion || 'N/A'}</div>
+                  </td>
+                  <td className="px-5 py-3 text-sm text-gray-500 dark:text-gray-400">
+                    <div>{client.email}</div>
+                    <div className="mt-1">{client.phoneNumber || 'Sin teléfono'}</div>
+                  </td>
+                  <td className="px-5 py-3 text-sm text-gray-500 dark:text-gray-400">
+                    {client.province || client.canton || client.district ? (
+                      <>{client.province}, {client.canton}, {client.district}</>
+                    ) : 'No especificada'}
+                  </td>
+                  <td className="px-5 py-3 text-sm text-gray-500 dark:text-gray-400 max-w-xs truncate" title={client.exactAddress}>
+                    {client.exactAddress || 'N/A'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
