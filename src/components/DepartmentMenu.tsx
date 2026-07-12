@@ -84,9 +84,14 @@ export default function DepartmentMenu({ onSelectCategory, selectedCategory }: D
               >
                 <button
                   onClick={(e) => {
+                    e.preventDefault();
                     if (window.innerWidth <= 640) {
-                      e.preventDefault();
                       setActiveDepartment(activeDepartment === dep ? null : dep);
+                      onSelectCategory(dep);
+                    } else {
+                      onSelectCategory(dep);
+                      setIsOpen(false);
+                      setActiveDepartment(null);
                     }
                   }}
                   className={`w-full flex items-center justify-between px-4 py-3.5 text-sm font-medium transition-colors ${
