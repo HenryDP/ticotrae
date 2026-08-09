@@ -1320,6 +1320,7 @@ function EditorForm({ prod, onDone }: { prod: Producto, onDone: () => void, key?
 function ClientsPanel() {
   const [clients, setClients] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'users'), (snapshot) => {
@@ -1334,25 +1335,31 @@ function ClientsPanel() {
     return () => unsub();
   }, []);
 
-  const exportCSV = () => {
-    const headers = ['Nombre', 'Correo', 'Teléfono', 'Provincia', 'Cantón', 'Distrito', 'Dirección Exacta', 'Identificación'];
-    const rows = clients.map(c => [
-      c.displayName || '',
-      c.email || '',
-      c.phoneNumber || '',
-      c.province || '',
-      c.canton || '',
-      c.district || '',
-      c.exactAddress || '',
-      c.numeroIdentificacion || ''
-    ]);
+  const getClientData = () => {
+    return clients.map(c => ({
+      nombre: c.displayName || '',
+      correo: c.email || '',
+      telefono1: c.phoneNumber || '',
+      telefono2: c.secondPhoneNumber || '',
+      direccion: c.exactAddress || '',
+      apartado: c.apartadoPostal || '',
+      identificacion: c.numeroIdentificacion || ''
+    }));
+  };
 
-    const csvContent = [
+  const getCsvContent = () => {
+    const headers = ['Nombre Completo', 'Correo Electrónico', 'Teléfono 1', 'Teléfono 2', 'Dirección Exacta', 'Apartado Postal', 'Identificación'];
+    const data = getClientData();
+    const rows = data.map(c => [c.nombre, c.correo, c.telefono1, c.telefono2, c.direccion, c.apartado, c.identificacion]);
+    return [
       headers.join(','),
       ...rows.map(r => r.map(field => `"${(field || '').replace(/"/g, '""')}"`).join(','))
     ].join('\n');
+  };
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const exportCSV = () => {
+    const csvContent = getCsvContent();
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -1360,26 +1367,162 @@ function ClientsPanel() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    setIsExportMenuOpen(false);
+  };
+
+  const exportPDF = () => {
+    const doc = new jsPDF({ orientation: 'landscape' });
+    doc.setFontSize(16);
+    doc.text('Reporte de Clientes - TicoTrae', 14, 20);
+    doc.setFontSize(10);
+    doc.text(`Generado el: ${new Date().toLocaleDateString()}`, 14, 28);
+
+    const headers = [['Nombre Completo', 'Correo', 'Teléfono 1', 'Teléfono 2', 'Dirección Exacta', 'Apartado Postal']];
+    const data = getClientData().map(c => [c.nombre, c.correo, c.telefono1, c.telefono2, c.direccion, c.apartado]);
+
+    autoTable(doc, {
+      startY: 35,
+      head: headers,
+      body: data,
+      theme: 'grid',
+      headStyles: { fillColor: [37, 99, 235] },
+      styles: { fontSize: 8, cellPadding: 2, overflow: 'linebreak' },
+      columnStyles: {
+        4: { cellWidth: 60 } // Make address column wider
+      }
+    });
+
+    doc.save(`reporte_clientes_ticotrae_${new Date().toISOString().split('T')[0]}.pdf`);
+    setIsExportMenuOpen(false);
+  };
+
+  const exportWord = () => {
+    const data = getClientData();
+    let html = `
+      <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+      <head><meta charset='utf-8'><title>Reporte de Clientes</title>
+      <style>
+        body { font-family: Arial, sans-serif; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+      </style>
+      </head>
+      <body>
+        <h2>Reporte de Clientes - TicoTrae</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Nombre Completo</th>
+              <th>Correo Electrónico</th>
+              <th>Teléfono 1</th>
+              <th>Teléfono 2</th>
+              <th>Dirección Exacta</th>
+              <th>Apartado Postal</th>
+            </tr>
+          </thead>
+          <tbody>
+    `;
+
+    data.forEach(c => {
+      html += `
+        <tr>
+          <td>${c.nombre}</td>
+          <td>${c.correo}</td>
+          <td>${c.telefono1}</td>
+          <td>${c.telefono2}</td>
+          <td>${c.direccion}</td>
+          <td>${c.apartado}</td>
+        </tr>
+      `;
+    });
+
+    html += `</tbody></table></body></html>`;
+
+    const blob = new Blob(['\ufeff', html], { type: 'application/msword' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `reporte_clientes_ticotrae_${new Date().toISOString().split('T')[0]}.doc`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setIsExportMenuOpen(false);
+  };
+
+  const shareReport = async () => {
+    const csvContent = getCsvContent();
+    const file = new File([new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' })], `reporte_clientes_${new Date().toISOString().split('T')[0]}.csv`, { type: 'text/csv' });
+    
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({
+          title: 'Reporte de Clientes TicoTrae',
+          text: 'Aquí está el reporte de clientes generado desde TicoTrae.',
+          files: [file]
+        });
+      } catch (error) {
+        console.error('Error sharing:', error);
+      }
+    } else {
+      alert('Tu dispositivo no soporta compartir archivos directamente. Por favor usa la opción de descargar.');
+    }
+    setIsExportMenuOpen(false);
   };
 
   if (loading) return <div className="py-10 text-center text-gray-500 dark:text-gray-400"><Loader2 className="animate-spin mx-auto" /></div>;
 
   return (
     <div className="bg-white dark:bg-slate-800 rounded-3xl border border-gray-200 dark:border-slate-700 shadow-sm overflow-hidden w-full mx-auto p-6 sm:p-8">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8 pb-4 border-b border-gray-100 dark:border-slate-700">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8 pb-4 border-b border-gray-100 dark:border-slate-700 relative">
         <div>
           <h2 className="text-xl font-bold text-gray-900 dark:text-white">Reporte de Clientes</h2>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
             Total: {clients.length} {clients.length === 1 ? 'cliente' : 'clientes'}
           </p>
         </div>
-        <div className="flex gap-3 mt-4 sm:mt-0">
+        <div className="mt-4 sm:mt-0 relative">
           <button 
-            onClick={exportCSV}
-            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-xl text-sm font-semibold transition flex items-center gap-2 shadow-sm shadow-green-600/20"
+            onClick={() => setIsExportMenuOpen(!isExportMenuOpen)}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition flex items-center gap-2 shadow-sm shadow-blue-600/20"
           >
-            Exportar CSV
+            <FileDown size={18} />
+            Exportar Reporte
           </button>
+          
+          {isExportMenuOpen && (
+            <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-gray-100 dark:border-slate-700 z-50 overflow-hidden">
+              <button 
+                onClick={exportCSV}
+                className="w-full text-left px-4 py-3 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 flex items-center gap-2"
+              >
+                <FileSpreadsheet size={16} className="text-green-600" />
+                Excel / CSV
+              </button>
+              <button 
+                onClick={exportWord}
+                className="w-full text-left px-4 py-3 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 flex items-center gap-2"
+              >
+                <FileText size={16} className="text-blue-600" />
+                Word (.doc)
+              </button>
+              <button 
+                onClick={exportPDF}
+                className="w-full text-left px-4 py-3 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 flex items-center gap-2"
+              >
+                <FileText size={16} className="text-red-500" />
+                PDF
+              </button>
+              <div className="h-px bg-gray-100 dark:bg-slate-700 w-full" />
+              <button 
+                onClick={shareReport}
+                className="w-full text-left px-4 py-3 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 flex items-center gap-2"
+              >
+                <Share2 size={16} className="text-gray-500" />
+                Compartir a otras apps
+              </button>
+            </div>
+          )}
         </div>
       </div>
       
@@ -1392,10 +1535,11 @@ function ClientsPanel() {
           <table className="w-full text-left border-collapse">
             <thead className="sticky top-0 bg-gray-50 dark:bg-slate-700/90 backdrop-blur-sm z-10 shadow-sm">
               <tr>
-                <th className="px-5 py-3 text-sm font-semibold text-gray-700 dark:text-gray-300">Nombre</th>
-                <th className="px-5 py-3 text-sm font-semibold text-gray-700 dark:text-gray-300">Contacto</th>
-                <th className="px-5 py-3 text-sm font-semibold text-gray-700 dark:text-gray-300">Ubicación</th>
-                <th className="px-5 py-3 text-sm font-semibold text-gray-700 dark:text-gray-300">Dirección Exacta</th>
+                <th className="px-5 py-3 text-sm font-semibold text-gray-700 dark:text-gray-300 min-w-[200px]">Nombre Completo</th>
+                <th className="px-5 py-3 text-sm font-semibold text-gray-700 dark:text-gray-300">Correo Electrónico</th>
+                <th className="px-5 py-3 text-sm font-semibold text-gray-700 dark:text-gray-300 min-w-[150px]">Teléfonos</th>
+                <th className="px-5 py-3 text-sm font-semibold text-gray-700 dark:text-gray-300 min-w-[250px]">Dirección Exacta</th>
+                <th className="px-5 py-3 text-sm font-semibold text-gray-700 dark:text-gray-300">Apartado Postal</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-slate-700/50">
@@ -1403,19 +1547,29 @@ function ClientsPanel() {
                 <tr key={client.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors">
                   <td className="px-5 py-3 text-sm text-gray-900 dark:text-white">
                     <div className="font-medium">{client.displayName || 'Sin nombre'}</div>
-                    <div className="text-xs text-gray-500 mt-1">{client.tipoIdentificacion}: {client.numeroIdentificacion || 'N/A'}</div>
+                    <div className="text-xs text-gray-500 mt-1">{client.tipoIdentificacion ? `${client.tipoIdentificacion}: ` : ''}{client.numeroIdentificacion || 'Sin ID'}</div>
                   </td>
                   <td className="px-5 py-3 text-sm text-gray-500 dark:text-gray-400">
                     <div>{client.email}</div>
-                    <div className="mt-1">{client.phoneNumber || 'Sin teléfono'}</div>
                   </td>
                   <td className="px-5 py-3 text-sm text-gray-500 dark:text-gray-400">
-                    {client.province || client.canton || client.district ? (
-                      <>{client.province}, {client.canton}, {client.district}</>
-                    ) : 'No especificada'}
+                    <div className="font-medium text-gray-700 dark:text-gray-300">{client.phoneNumber || 'Sin teléfono'}</div>
+                    {client.secondPhoneNumber && <div className="text-xs mt-1 text-gray-500">{client.secondPhoneNumber}</div>}
                   </td>
-                  <td className="px-5 py-3 text-sm text-gray-500 dark:text-gray-400 max-w-xs truncate" title={client.exactAddress}>
-                    {client.exactAddress || 'N/A'}
+                  <td className="px-5 py-3 text-sm text-gray-500 dark:text-gray-400 max-w-xs">
+                    {client.exactAddress ? (
+                      <div className="line-clamp-2" title={client.exactAddress}>{client.exactAddress}</div>
+                    ) : (
+                      <span className="italic text-gray-400">No especificada</span>
+                    )}
+                    {client.province && (
+                      <div className="text-xs mt-1">
+                        {client.province}{client.canton ? `, ${client.canton}` : ''}
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-5 py-3 text-sm text-gray-500 dark:text-gray-400">
+                    {client.apartadoPostal || 'N/A'}
                   </td>
                 </tr>
               ))}

@@ -3,10 +3,21 @@ export const generateAmazonCartUrl = (asin: string, affiliateTag: string = 'tico
 };
 
 export const generateStandardAmazonUrl = (originalUrl: string, asin?: string, affiliateTag: string = 'ticotrae1981-20'): string => {
-  if (asin) {
+  let cleanUrl = originalUrl;
+  if (cleanUrl.toLowerCase().includes('amazon')) {
+    if (cleanUrl.includes('tag=')) {
+      cleanUrl = cleanUrl.replace(/tag=[^&]+/, `tag=${affiliateTag}`);
+    } else {
+      cleanUrl = cleanUrl.includes('?') ? `${cleanUrl}&tag=${affiliateTag}` : `${cleanUrl}?tag=${affiliateTag}`;
+    }
+  }
+  
+  if (asin && !originalUrl.toLowerCase().includes('amazon')) {
+     // If it has an ASIN but the URL isn't Amazon (edge case), just build the Amazon URL
     return `https://www.amazon.com/dp/${asin}?tag=${affiliateTag}`;
   }
-  return originalUrl.includes('?') ? `${originalUrl}&tag=${affiliateTag}` : `${originalUrl}?tag=${affiliateTag}`;
+
+  return cleanUrl;
 };
 
 export const generateAmazonDeepLink = (originalUrl: string, asin?: string, affiliateTag: string = 'ticotrae1981-20'): string => {

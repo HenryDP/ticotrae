@@ -5,6 +5,7 @@ import { db, auth } from '../firebase';
 import { Producto } from '../types';
 import { ExternalLink, Heart, ArrowLeft, MessageCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { generateStandardAmazonUrl } from '../utils/amazonLinks';
 
 export default function Wishlist() {
   const [productos, setProductos] = useState<Producto[]>([]);
@@ -157,7 +158,7 @@ export default function Wishlist() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {productos.map(producto => {
-            const message = `Hola, me interesa encargar este producto mediante pago por SINPE Móvil:\n\n*${producto.titulo}*\n\nPrecio Final: ₡${producto.precio_cr?.toLocaleString('es-CR')}\n\nEnlace original: ${producto.url_original}`;
+            const message = `Hola, me interesa encargar este producto mediante pago por SINPE Móvil:\n\n*${producto.titulo}*\n\nPrecio Final: ₡${producto.precio_cr?.toLocaleString('es-CR')}\n\nEnlace: ${window.location.origin}/producto/${producto.id}`;
             const whatsappUrl = `https://wa.me/50664435508?text=${encodeURIComponent(message)}`;
 
             return (
@@ -193,7 +194,7 @@ export default function Wishlist() {
                        fill="currentColor" 
                      />
                    </button>
-                   <a href={producto.url_original} target="_blank" rel="noopener noreferrer" className="bg-white/90 dark:bg-slate-800/90 backdrop-blur text-gray-700 dark:text-gray-300 p-2 rounded-full shadow-sm border border-gray-100 dark:border-slate-600 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center justify-center">
+                   <a href={producto.tienda_origen === 'amazon' || (producto.url_original || '').toLowerCase().includes('amazon') ? generateStandardAmazonUrl(producto.url_original || '', producto.asin) : producto.url_original} target="_blank" rel="noopener noreferrer" className="bg-white/90 dark:bg-slate-800/90 backdrop-blur text-gray-700 dark:text-gray-300 p-2 rounded-full shadow-sm border border-gray-100 dark:border-slate-600 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center justify-center">
                      <ExternalLink size={18} />
                    </a>
                 </div>

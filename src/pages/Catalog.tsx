@@ -8,6 +8,7 @@ import DepartmentMenu from '../components/DepartmentMenu';
 import { useCart } from '../context/CartContext';
 
 import toast from 'react-hot-toast';
+import { generateStandardAmazonUrl } from '../utils/amazonLinks';
 
 export default function Catalog() {
   const [productos, setProductos] = useState<Producto[]>([]);
@@ -375,7 +376,7 @@ export default function Catalog() {
                        fill={favorites.includes(producto.id) ? "currentColor" : "none"} 
                      />
                    </button>
-                   <a href={producto.url_original} target="_blank" rel="noopener noreferrer" className="bg-white/90 dark:bg-slate-800/90 backdrop-blur text-gray-700 dark:text-gray-300 p-2 rounded-full shadow-sm border border-gray-100 dark:border-slate-600 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center justify-center">
+                   <a href={producto.tienda_origen === 'amazon' || (producto.url_original || '').toLowerCase().includes('amazon') ? generateStandardAmazonUrl(producto.url_original || '', producto.asin) : producto.url_original} target="_blank" rel="noopener noreferrer" className="bg-white/90 dark:bg-slate-800/90 backdrop-blur text-gray-700 dark:text-gray-300 p-2 rounded-full shadow-sm border border-gray-100 dark:border-slate-600 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center justify-center">
                      <ExternalLink size={18} />
                    </a>
                 </div>
