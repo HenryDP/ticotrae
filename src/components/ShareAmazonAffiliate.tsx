@@ -1,5 +1,4 @@
-import React, { useState } from 'react';
-import { useAmazonAffiliate } from '../hooks/useAmazonAffiliate';
+import React, { useState, useEffect } from 'react';
 import { Facebook, MessageCircle, Copy, Check, Instagram } from 'lucide-react';
 
 const TikTokIcon = ({ size = 18, className = "" }) => (
@@ -9,41 +8,81 @@ const TikTokIcon = ({ size = 18, className = "" }) => (
 );
 
 interface ShareAmazonAffiliateProps {
-  url: string;
+  url: string; // Not used directly for the shared link anymore, but kept for compatibility
   affiliateTag?: string;
   productName?: string;
 }
 
-export default function ShareAmazonAffiliate({ url, affiliateTag = 'ticotrae1981-20', productName = 'este producto' }: ShareAmazonAffiliateProps) {
-  const { affiliateUrl, shareOnFacebook, shareOnWhatsApp, shareNative } = useAmazonAffiliate({ 
-    originalUrl: url, 
-    affiliateTag 
-  });
-  
+export default function ShareAmazonAffiliate({ productName = 'este producto' }: ShareAmazonAffiliateProps) {
   const [copied, setCopied] = useState(false);
+  const [currentUrl, setCurrentUrl] = useState('');
+
+  useEffect(() => {
+    setCurrentUrl(window.location.href);
+  }, []);
 
   const handleCopy = () => {
-    if (!affiliateUrl) return;
-    navigator.clipboard.writeText(affiliateUrl);
+    if (!currentUrl) return;
+    navigator.clipboard.writeText(currentUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
-  if (!url) return null;
+  const shareOnFacebook = () => {
+    if (!currentUrl) return;
+    const fbShareUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(currentUrl)}`;
+    window.open(fbShareUrl, '_blank', 'width=600,height=400');
+  };
+
+  const shareOnWhatsApp = (defaultText: string = `¡Mira este increíble producto en TicoTrae!`) => {
+    if (!currentUrl) return;
+    const waShareUrl = `https://wa.me/?text=${encodeURIComponent(defaultText + '\n\n' + currentUrl)}`;
+    window.open(waShareUrl, '_blank');
+  };
+
+  const fallbackShare = async (platformName: string, defaultText: string) => {
+    if (!currentUrl) return;
+    try {
+      await navigator.clipboard.writeText(`${defaultText}\n\n${currentUrl}`);
+      alert(`Enlace copiado al portapapeles. Abre la aplicación de ${platformName} para pegarlo en tu publicación o historia.`);
+    } catch(e) {
+      alert(`Actualmente no se puede compartir directamente a ${platformName} desde aquí. Por favor copia manualmente el enlace.`);
+    }
+  };
+
+  const shareNative = async (platformName: string, defaultText: string = `¡Mira este increíble producto en TicoTrae!`) => {
+    if (!currentUrl) return;
+    
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'Producto Recomendado',
+          text: defaultText,
+          url: currentUrl,
+        });
+      } catch (error) {
+        if ((error as Error).name !== 'AbortError') {
+          fallbackShare(platformName, defaultText);
+        }
+      }
+    } else {
+      fallbackShare(platformName, defaultText);
+    }
+  };
 
   return (
     <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm mt-4">
       <h4 className="text-sm font-bold text-gray-900 dark:text-white mb-1">
-        Compartir como Afiliado
+        Compartir Producto
       </h4>
       <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-        Gana comisiones al compartir este enlace limpio
+        Comparte este producto con tus amigos
       </p>
       
       <div className="flex items-center gap-2 mb-4">
         <input 
           type="text" 
-          value={affiliateUrl || 'Generando enlace...'}
+          value={currentUrl || 'Cargando enlace...'}
           readOnly 
           className="flex-1 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-600 rounded-lg py-2 px-3 text-xs text-gray-600 dark:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
         />
@@ -66,7 +105,7 @@ export default function ShareAmazonAffiliate({ url, affiliateTag = 'ticotrae1981
         </button>
         
         <button 
-          onClick={() => shareOnWhatsApp(`¡Te recomiendo darle un vistazo a ${productName} en Amazon!`)}
+          onClick={() => shareOnWhatsApp(`¡Te recomiendo darle un vistazo a ${productName} en TicoTrae!`)}
           className="bg-[#25D366]/10 hover:bg-[#25D366]/20 text-[#25D366] font-semibold py-2.5 rounded-xl text-sm transition-colors flex items-center justify-center gap-2"
         >
           <MessageCircle size={18} />
@@ -74,7 +113,7 @@ export default function ShareAmazonAffiliate({ url, affiliateTag = 'ticotrae1981
         </button>
 
         <button 
-          onClick={() => shareNative('Instagram', `¡Te recomiendo darle un vistazo a ${productName} en Amazon!`)}
+          onClick={() => shareNative('Instagram', `¡Te recomiendo darle un vistazo a ${productName} en TicoTrae!`)}
           className="bg-gradient-to-r from-[#833AB4]/10 via-[#FD1D1D]/10 to-[#F56040]/10 hover:from-[#833AB4]/20 hover:via-[#FD1D1D]/20 hover:to-[#F56040]/20 text-[#E1306C] font-semibold py-2.5 rounded-xl text-sm transition-colors flex items-center justify-center gap-2"
         >
           <Instagram size={18} />
@@ -82,7 +121,7 @@ export default function ShareAmazonAffiliate({ url, affiliateTag = 'ticotrae1981
         </button>
 
         <button 
-          onClick={() => shareNative('TikTok', `¡Te recomiendo darle un vistazo a ${productName} en Amazon!`)}
+          onClick={() => shareNative('TikTok', `¡Te recomiendo darle un vistazo a ${productName} en TicoTrae!`)}
           className="bg-black/5 hover:bg-black/10 dark:bg-white/10 dark:hover:bg-white/20 text-black dark:text-white font-semibold py-2.5 rounded-xl text-sm transition-colors flex items-center justify-center gap-2"
         >
           <TikTokIcon size={18} />

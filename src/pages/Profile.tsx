@@ -212,8 +212,8 @@ export default function Profile() {
                   className="w-full border border-gray-300 dark:border-slate-600 bg-gray-50 dark:bg-slate-800 text-gray-500 dark:text-gray-400 rounded-xl px-4 py-2.5 outline-none cursor-not-allowed" 
                 />
               </div>
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Número de Teléfono / WhatsApp</label>
+              <div className="md:col-span-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Teléfono Principal / WhatsApp</label>
                 <input 
                   type="tel" 
                   required
@@ -226,11 +226,22 @@ export default function Profile() {
                     errors.phoneNumber 
                       ? 'border-red-500 focus:ring-red-500 bg-red-50 dark:bg-red-900/10' 
                       : 'border-gray-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white focus:ring-cr-blue'
-                  }`} 
+                  }`}
                 />
                 {errors.phoneNumber && (
                   <p className="mt-1.5 text-sm text-red-600 dark:text-red-400">{errors.phoneNumber}</p>
                 )}
+              </div>
+              <div className="md:col-span-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Teléfono Secundario (Opcional)</label>
+                <input 
+                  type="tel" 
+                  value={profile.secondPhoneNumber || ''}
+                  onChange={e => {
+                    setProfile({...profile, secondPhoneNumber: e.target.value});
+                  }}
+                  className={`w-full border border-gray-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-cr-blue focus:border-transparent transition-all`}
+                />
               </div>
             </div>
           </section>
@@ -288,11 +299,22 @@ export default function Profile() {
                       errors.postalCode 
                         ? 'border-red-500 focus:ring-red-500 bg-red-50 dark:bg-red-900/10' 
                         : 'border-gray-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white focus:ring-cr-blue'
-                    }`} 
+                    }`}
                   />
                   {errors.postalCode && (
                     <p className="mt-1.5 text-sm text-red-600 dark:text-red-400">{errors.postalCode}</p>
                   )}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Apartado Postal (Opcional)</label>
+                  <input 
+                    type="text" 
+                    value={profile.apartadoPostal || ''}
+                    onChange={e => {
+                      setProfile({...profile, apartadoPostal: e.target.value});
+                    }}
+                    className={`w-full border border-gray-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-cr-blue focus:border-transparent transition-all`}
+                  />
                 </div>
               </div>
 

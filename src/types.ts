@@ -74,11 +74,13 @@ export interface UserProfile {
   email: string;
   displayName: string;
   phoneNumber?: string;
+  secondPhoneNumber?: string;
   province?: string;
   canton?: string;
   district?: string;
   exactAddress?: string;
   postalCode?: string;
+  apartadoPostal?: string;
   tipoIdentificacion?: string;
   numeroIdentificacion?: string;
   razonSocial?: string;

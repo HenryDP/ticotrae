@@ -3,9 +3,11 @@ import { collection, query, where, onSnapshot, doc, updateDoc, serverTimestamp, 
 import { signOut, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, User } from 'firebase/auth';
 import { db, auth } from '../firebase';
 import { Producto, CATEGORIAS, GeneralSettings, UserProfile } from '../types';
-import { FileEdit, CheckCircle2, DollarSign, Loader2, LogOut, Mail, Trash2, Upload, ImagePlus } from 'lucide-react';
+import { FileEdit, CheckCircle2, DollarSign, Loader2, LogOut, Mail, Trash2, Upload, ImagePlus, FileSpreadsheet, FileText, Share2, FileDown } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { scrapeFallback, parseHTMLProduct } from '../utils/scraper';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 export default function Admin() {
   const [productos, setProductos] = useState<Producto[]>([]);
