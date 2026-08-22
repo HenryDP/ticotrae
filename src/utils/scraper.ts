@@ -276,22 +276,43 @@ export function parseHTMLProduct(html: string, url: string) {
     }
 
     // Sizes
-    const sizeSelect = doc.querySelector('#native_dropdown_selected_size_name');
+    const sizeSelect = doc.querySelector('#native_dropdown_selected_size_name') || doc.querySelector('select[name="dropdown_selected_size_name"]');
     if (sizeSelect) {
       const options = Array.from(sizeSelect.querySelectorAll('option'))
         .map(o => o.textContent?.trim() || '')
-        .filter(t => t.toLowerCase() !== 'select' && t !== '');
+        .filter(t => t.toLowerCase() !== 'select' && !t.toLowerCase().includes('select size') && t !== '');
       extractedTallas = options.join(', ');
     } else {
-      const twisterSizes = doc.querySelectorAll('#variation_size_name ul li');
+      const twisterSizes = doc.querySelectorAll('#variation_size_name ul li, #variation_color_name ul li, #variation_style_name ul li, .swatchAvailable, .swatchSelect, .po-size');
       if (twisterSizes.length > 0) {
         const sizeArr: string[] = [];
         twisterSizes.forEach(li => {
-          const txt = li.textContent?.trim();
-          if (txt) sizeArr.push(txt);
+          let txt = li.getAttribute('title') || li.textContent?.trim();
+          if (txt) {
+             txt = txt.replace(/^Click to select\s*/i, '').trim();
+             // Often twister size text includes price like "\n\n\n $19.99"
+             txt = txt.split('\n')[0].trim();
+             if (txt && !sizeArr.includes(txt) && txt.toLowerCase() !== 'select') {
+               sizeArr.push(txt);
+             }
+          }
         });
         extractedTallas = sizeArr.join(', ');
       }
+    }
+    
+    // Fallback: extract sizes from inline JS (variationValues or dimensions)
+    if (!extractedTallas) {
+       const dimensionRegex = /"size_name"\s*:\s*\[(.*?)\]/i;
+       const match = html.match(dimensionRegex);
+       if (match && match[1]) {
+         try {
+           const arr = JSON.parse(`[${match[1]}]`);
+           if (Array.isArray(arr) && arr.length > 0) {
+              extractedTallas = arr.map(s => String(s).trim()).filter(Boolean).join(', ');
+           }
+         } catch(e) {}
+       }
     }
   } else if (isEbay) {
     // ----------------- EBAY DOM PARSING -----------------
