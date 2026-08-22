@@ -3,6 +3,8 @@ import { useCart } from '../context/CartContext';
 import { Trash2, MessageCircle, ExternalLink, ArrowRight } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 
+import { generateMultiAmazonCartUrl, generateStandardAmazonUrl } from '../utils/amazonLinks';
+
 export default function Cart() {
   const { cart, removeFromCart, clearCart } = useCart();
   const [envioDestino, setEnvioDestino] = useState<'ticotrae' | 'personal'>('ticotrae');
@@ -32,16 +34,26 @@ export default function Cart() {
 
   const handleCheckoutAmazon = () => {
     if (cart.length === 0) return;
+
+    // Check if we can build a multi-item cart link (all items have ASIN)
+    const itemsWithAsin = cart.filter(item => item.producto.asin);
     
-    // For Amazon checkout, we can only really redirect to one of the products affiliate links,
-    // or tell the user to checkout individually. Let's redirect to the first item for now.
+    if (itemsWithAsin.length > 0) {
+      const cartItems = itemsWithAsin.map(item => ({
+        asin: item.producto.asin!,
+        quantity: item.cantidad
+      }));
+      const urlAfiliado = generateMultiAmazonCartUrl(cartItems);
+      window.open(urlAfiliado, '_blank');
+      return;
+    }
+
+    // Fallback: Just open the first item's affiliate link
     const firstItem = cart[0].producto;
-    const urlAfiliado = firstItem.asin 
-      ? `https://www.amazon.com/dp/${firstItem.asin}?tag=ticotrae1981-20`
-      : firstItem.url_original 
-        ? firstItem.url_original + (firstItem.url_original.includes('?') ? '&' : '?') + 'tag=ticotrae1981-20'
+    const urlAfiliado = firstItem.url_original 
+        ? generateStandardAmazonUrl(firstItem.url_original, firstItem.asin)
         : '#';
-    
+
     window.open(urlAfiliado, '_blank');
   };
 

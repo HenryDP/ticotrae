@@ -2,6 +2,14 @@ export const generateAmazonCartUrl = (asin: string, affiliateTag: string = 'tico
   return `https://www.amazon.com/gp/aws/cart/add.html?AssociateTag=${affiliateTag}&ASIN.1=${asin}&Quantity.1=1`;
 };
 
+export const generateMultiAmazonCartUrl = (items: {asin: string, quantity: number}[], affiliateTag: string = 'ticotrae1981-20'): string => {
+  let url = `https://www.amazon.com/gp/aws/cart/add.html?AssociateTag=${affiliateTag}`;
+  items.forEach((item, index) => {
+    url += `&ASIN.${index + 1}=${item.asin}&Quantity.${index + 1}=${item.quantity}`;
+  });
+  return url;
+};
+
 export const generateStandardAmazonUrl = (originalUrl: string, asin?: string, affiliateTag: string = 'ticotrae1981-20'): string => {
   let cleanUrl = originalUrl;
   if (cleanUrl.toLowerCase().includes('amazon')) {
