@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { Producto } from '../types';
-import { ExternalLink, Heart, ArrowLeft, MessageCircle } from 'lucide-react';
+import {  ExternalLink, Heart, ArrowLeft, MessageCircle , Share2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { generateStandardAmazonUrl } from '../utils/amazonLinks';
 
@@ -117,7 +117,34 @@ export default function Wishlist() {
     });
   };
 
-  return (
+
+
+  const handleShareProduct = async (producto: Producto, e: React.MouseEvent) => {
+    e.preventDefault();
+    const url = `${window.location.origin}/producto/${producto.id}`;
+    const title = producto.titulo;
+    const text = `¡Mira este producto en TicoTrae! ${title}`;
+    
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: title,
+          text: text,
+          url: url,
+        });
+      } catch (error) {
+        if ((error as Error).name !== 'AbortError') {
+           navigator.clipboard.writeText(`${text}\n\n${url}`);
+           toast.success("Enlace copiado al portapapeles");
+        }
+      }
+    } else {
+      navigator.clipboard.writeText(`${text}\n\n${url}`);
+      toast.success("Enlace copiado al portapapeles");
+    }
+  };
+
+            return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center gap-4 border-b border-gray-200 dark:border-slate-700 pb-4 mb-2">
         <Link to="/" className="p-2 -ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-500 dark:text-gray-400 transition-colors">
@@ -153,7 +180,7 @@ export default function Wishlist() {
             className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-violet-700 text-white font-bold py-3 px-6 rounded-xl transition-colors shadow-sm"
           >
             Explorar Catálogo
-          </Link>
+</Link>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -193,6 +220,14 @@ export default function Wishlist() {
                        className="text-rose-500" 
                        fill="currentColor" 
                      />
+                   </button>
+                   
+                   <button
+                     onClick={(e) => handleShareProduct(producto, e)}
+                     className="bg-white/90 dark:bg-slate-800/90 backdrop-blur text-gray-700 dark:text-gray-300 p-2 rounded-full shadow-sm border border-gray-100 dark:border-slate-600 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center justify-center"
+                     title="Compartir"
+                   >
+                     <Share2 size={18} />
                    </button>
                    <a href={producto.tienda_origen === 'amazon' || (producto.url_original || '').toLowerCase().includes('amazon') ? generateStandardAmazonUrl(producto.url_original || '', producto.asin) : producto.url_original} target="_blank" rel="noopener noreferrer" className="bg-white/90 dark:bg-slate-800/90 backdrop-blur text-gray-700 dark:text-gray-300 p-2 rounded-full shadow-sm border border-gray-100 dark:border-slate-600 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center justify-center">
                      <ExternalLink size={18} />

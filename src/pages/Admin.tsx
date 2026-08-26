@@ -398,6 +398,27 @@ export default function Admin() {
                       <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{p.titulo}</p>
                       <p className="text-xs text-blue-600 dark:text-blue-400 font-semibold mt-0.5">${p.precio_usd} {p.precio_cr ? `| ₡${p.precio_cr.toLocaleString('es-CR')}` : ''}</p>
                     </div>
+                    
+                    <button
+                      onClick={(e) => { 
+                        e.stopPropagation(); 
+                        const url = `${window.location.origin}/producto/${p.id}`;
+                        const text = `¡Mira este producto en TicoTrae! ${p.titulo}`;
+                        if (navigator.share) {
+                          navigator.share({ title: p.titulo, text: text, url: url }).catch(() => {
+                            navigator.clipboard.writeText(`${text}\n\n${url}`);
+                            toast.success("Enlace copiado");
+                          });
+                        } else {
+                          navigator.clipboard.writeText(`${text}\n\n${url}`);
+                          toast.success("Enlace copiado");
+                        }
+                      }}
+                      className="text-gray-300 hover:text-blue-600 p-2 rounded-lg opacity-0 group-hover:opacity-100 transition-all focus:opacity-100"
+                      title="Compartir enlace"
+                    >
+                      <Share2 size={16} />
+                    </button>
                     <button 
                       onClick={(e) => { e.stopPropagation(); handleDeleteProd(p.id); }}
                       className="text-gray-300 hover:text-red-600 p-2 rounded-lg opacity-0 group-hover:opacity-100 transition-all focus:opacity-100"

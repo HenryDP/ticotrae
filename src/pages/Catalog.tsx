@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { collection, query, where, onSnapshot, doc, updateDoc, getDoc, setDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { Producto, CATEGORIAS, GeneralSettings } from '../types';
-import { ExternalLink, Tag, Search, Filter, MessageCircle, Heart, ShoppingCart, Eye } from 'lucide-react';
+import {  ExternalLink, Tag, Search, Filter, MessageCircle, Heart, ShoppingCart, Eye , Share2 } from 'lucide-react';
 import DepartmentMenu from '../components/DepartmentMenu';
 import { useCart } from '../context/CartContext';
 
@@ -163,6 +163,32 @@ export default function Catalog() {
       </div>
     );
   }
+
+
+  const handleShareProduct = async (producto: Producto, e: React.MouseEvent) => {
+    e.preventDefault();
+    const url = `${window.location.origin}/producto/${producto.id}`;
+    const title = producto.titulo;
+    const text = `¡Mira este producto en TicoTrae! ${title}`;
+    
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: title,
+          text: text,
+          url: url,
+        });
+      } catch (error) {
+        if ((error as Error).name !== 'AbortError') {
+           navigator.clipboard.writeText(`${text}\n\n${url}`);
+           toast.success("Enlace copiado al portapapeles");
+        }
+      }
+    } else {
+      navigator.clipboard.writeText(`${text}\n\n${url}`);
+      toast.success("Enlace copiado al portapapeles");
+    }
+  };
 
   return (
     <div className="flex flex-col gap-6">
@@ -375,6 +401,14 @@ export default function Catalog() {
                        className={favorites.includes(producto.id) ? "text-rose-500" : "text-gray-400"} 
                        fill={favorites.includes(producto.id) ? "currentColor" : "none"} 
                      />
+                   </button>
+                   
+                   <button
+                     onClick={(e) => handleShareProduct(producto, e)}
+                     className="bg-white/90 dark:bg-slate-800/90 backdrop-blur text-gray-700 dark:text-gray-300 p-2 rounded-full shadow-sm border border-gray-100 dark:border-slate-600 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center justify-center"
+                     title="Compartir"
+                   >
+                     <Share2 size={18} />
                    </button>
                    <a href={producto.tienda_origen === 'amazon' || (producto.url_original || '').toLowerCase().includes('amazon') ? generateStandardAmazonUrl(producto.url_original || '', producto.asin) : producto.url_original} target="_blank" rel="noopener noreferrer" className="bg-white/90 dark:bg-slate-800/90 backdrop-blur text-gray-700 dark:text-gray-300 p-2 rounded-full shadow-sm border border-gray-100 dark:border-slate-600 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center justify-center">
                      <ExternalLink size={18} />
